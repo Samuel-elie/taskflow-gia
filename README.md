@@ -1,805 +1,1677 @@
-TaskFlow – Documentation technique
-1. Architecture & Choix Techniques
-1.1 Architecture générale (Full-Stack découplée)
+TaskFlow – Documentation technique 
 
-Le projet est construit sur une architecture découplée en trois blocs principaux :
+Architecture & Choix Techniques 
 
-Frontend (Next.js) → API (NestJS REST) → Base de données (PostgreSQL sur Neon)
+1.1  Architecture générale (Full-Stack découplée) 
 
-Pourquoi une architecture découplée ?
+Le projet est construit sur une architecture découplée en trois blocs : 
 
-L’objectif est d’assurer :
+Frontend (Next.js) → API (NestJS REST) → Base de données (PostgreSQL sur Neon) 
 
-Clarté
+Pourquoi une architecture découplée ? 
 
-Évolutivité
+Objectif : clarté, évolutivité, et maintenance. 
 
-Maintenabilité
+Séparation des responsabilités : 
 
-Scalabilité
+Le Front gère l’UI/UX et l’expérience utilisateur. 
 
-Séparation des responsabilités
+L’API gère la logique métier, la sécurité, la validation, et les règles d’accès. 
 
-Frontend : gestion de l’interface utilisateur (UI/UX) et de l’expérience utilisateur.
+La DB gère la persistance et la cohérence des données. 
 
-API (Backend) : gestion de la logique métier, de la sécurité, de la validation et des règles d’accès.
+Scalabilité : chaque partie peut évoluer indépendamment (ex : remplacer la DB, ajouter un mobile, scaler l’API sans toucher au Front). 
 
-Base de données : gestion de la persistance et de la cohérence des données.
+Interopérabilité : une API REST permet à d’autres clients (mobile, outils internes, intégrations) d’utiliser les mêmes endpoints. 
 
-Avantages
+Benchmark vs architecture “monolithique” (ex : Next.js fullstack + API routes + DB) 
 
-Chaque partie peut évoluer indépendamment.
+Alternative : tout mettre dans Next.js (API routes + DB + UI). 
 
-Possibilité d’ajouter un client mobile sans modifier l’API.
+Avantage : simple au début, moins de projets à gérer. 
 
-Possibilité de scaler uniquement l’API.
+Limites : 
 
-API REST réutilisable par d’autres systèmes internes.
+logique métier mélangée avec la partie web 
 
-Benchmark vs architecture monolithique (Next.js fullstack)
+sécurité/guards moins structurés 
 
-Alternative possible :
+difficile de faire évoluer vers une vraie API entreprise 
 
-Next.js (UI + API Routes + DB)
+jobs/cron + architecture modulaire plus complexe 
 
-Avantages
+Choix final : découpler car le projet ressemble plus à un produit “entreprise” (rôles, audit, permissions, modules, cron jobs) qu’à un simple prototype. 
 
-Mise en place rapide
+ 
 
-Moins de projets à gérer
+1.2  Frontend : Next.js 16 + App Router + Tailwind 
 
-Limites
+Pourquoi Next.js ? 
 
-Logique métier mélangée à la couche UI
+Next.js est choisi car il combine : 
 
-Sécurité moins structurée
+routage moderne (App Router), 
 
-Moins adapté à une architecture “entreprise”
+performances (SSR/SSG si besoin), 
 
-Gestion des jobs/cron plus complexe
+DX excellente (TypeScript, bundling, conventions), 
 
-Choix final
+facilité de déploiement (Vercel ou autre). 
 
-Le projet s’apparente davantage à un produit orienté entreprise
-(rôles, audit, permissions, modules, évolutivité).
-Le découplage apporte donc plus de robustesse.
+Benchmark vs React “pur” (Vite + React Router) 
 
-1.2 Frontend : Next.js + App Router + TailwindCSS
-Pourquoi Next.js ?
+React (Vite) : 
 
-Next.js combine :
+plus léger, très rapide à démarrer 
 
-Routage moderne (App Router)
+tu dois ajouter toi-même : routing, conventions SSR (si besoin), structuration… 
+Next.js : 
 
-Excellente intégration TypeScript
+standard moderne pour apps web structurées 
 
-Performances optimisées
+très bon pour pages dynamiques type dashboard 
 
-Facilité de déploiement
+permet d’évoluer vers SSR/SEO si nécessaire 
 
-Structure claire orientée produit
+un peu plus “framework” (mais bénéfique à moyen terme) 
 
-Benchmark vs React pur (Vite + React Router)
-React (Vite)	Next.js
-Très léger	Framework structurant
-Démarrage rapide	Structure robuste
-Routage à configurer	Routing intégré
-Moins orienté SSR	SSR/SSG natif
-Choix final
+Choix final : Next.js car l’app est orientée “produit” (dashboard, pages protégées, navigation), et Next facilite la structure et l’évolution. 
 
-Next.js est plus adapté pour une application type dashboard produit structuré.
+App Router et Client Components 
 
-App Router & Client Components
+App Router : architecture plus moderne et claire (routes basées sur dossiers). 
 
-App Router : architecture claire basée sur les dossiers.
+Client Components : utilisés là où on a besoin d’interactivité (modals, tables, drawers, actions). 
 
-Client Components : utilisées pour les interactions (modals, tables, actions dynamiques).
+Les pages protégées utilisent requireAuth() pour s’assurer qu’un token est présent côté client. 
 
-Protection des pages via requireAuth() côté client.
+TailwindCSS 
 
-TailwindCSS
+rapidité de développement UI 
 
-Rapidité de développement
+design cohérent et maintenable (classes utilitaires) 
 
-Cohérence visuelle
+facile à itérer (important en période de délai) 
 
-Facilité d’itération
+Communication API via fetch (wrapper apiFetch) 
 
-Idéal dans un contexte de délai court
+Centralisation des erreurs (status, messages) 
 
-Communication API
+Réduction du code répétitif 
 
-Utilisation d’un wrapper apiFetch :
+Facilite l’ajout futur d’un refresh token automatique 
 
-Centralisation des erreurs
+ 
 
-Réduction du code répétitif
+1.3  Backend : NestJS + architecture modulaire + JWT + Guards + DTO 
 
-Facilite l’ajout futur d’un refresh token automatique
+Pourquoi NestJS ? 
 
-1.3 Backend : NestJS + Architecture modulaire
-Pourquoi NestJS ?
+NestJS est choisi car il est très adapté aux APIs “entreprise” : 
 
-NestJS est adapté aux architectures “entreprise” grâce à :
+Architecture modulaire (Modules / Controllers / Services) 
 
-Architecture modulaire (Modules / Controllers / Services)
+Injection de dépendances (maintenabilité + testabilité) 
 
-Injection de dépendances
+Guards (sécurité et règles d’accès propres) 
 
-Guards
+Pipes (validation DTO) 
 
-Pipes
+Support natif de JWT, Passport, Cron jobs 
 
-Intégration JWT native
+Benchmark vs Express “pur” 
 
-Benchmark vs Express
-Express	NestJS
-Minimal	Structuré
-Flexible	Modulaire
-Risque de désorganisation	Convention forte
-Moins encadré	Scalable
-Choix final
+Express : 
 
-Compte tenu des modules (auth, workspaces, tasks, rôles, notifications),
-une architecture modulaire est plus robuste.
+minimal, flexible 
 
-Authentification JWT (Access + Refresh)
+devient vite “désorganisé” si le projet grossit 
+(middlewares dispersés, logique métier pas structurée) 
 
-Access token utilisé en Bearer.
+NestJS : 
 
-Refresh token stocké en base sous forme hashée.
+structure imposée (bonne pratique) 
 
-Benchmark vs sessions/cookies
-Sessions	JWT
-Adapté monolithique	Adapté API découplée
-Stateful	Stateless
-Moins mobile-friendly	Mobile-ready
-Choix JWT
+scalable par modules 
 
-Architecture découplée + API réutilisable.
+très lisible et maintenable 
 
-Guards
+plus “verbeux” au début 
 
-JwtAuthGuard : protège les routes authentifiées.
+Choix final : NestJS car on a des notions structurées : auth, admin, workspaces, invites, tasks, notifications, jobs… Donc un framework modulaire apporte de la robustesse. 
 
-AdminGuard : protège les routes admin.
+Authentification JWT (Access + Refresh) 
 
-Avantage : séparation claire entre sécurité et logique métier.
+L’API est sécurisée par Bearer Token (access token). 
 
-Validation DTO
+Refresh token stocké en base sous forme hashée (sécurité en cas de fuite). 
 
-Validation automatique via ValidationPipe
+Benchmark vs sessions/cookies 
 
-class-validator
+Cookies/sessions : bien pour apps monolithiques, plus compliqué cross-domain et scalable. 
 
-Nettoyage des champs inattendus
+JWT : standard pour API découplée, mobile-friendly, facile à intégrer. 
 
-Robustesse API même si le front évolue
+Choix JWT car architecture découplée + besoin d’une API réutilisable. 
 
-1.4 Base de données : PostgreSQL + Neon + Prisma
-1.4.1 Pourquoi PostgreSQL ?
+Guards : JwtAuthGuard + AdminGuard 
 
-Le domaine TaskFlow est fortement relationnel :
+JwtAuthGuard protège les routes nécessitant authentification. 
 
-Workspaces
+AdminGuard bloque les routes admin si l’utilisateur n’a pas global_role=ADMIN. 
 
-Membres
+Sécurité plus “propre” qu’un check manuel dans chaque controller. 
 
-Projets
+Validation DTO (ValidationPipe + class-validator) 
 
-Tâches
+évite les payloads incohérents 
 
-Permissions
+nettoie les champs inattendus (whitelist) 
 
-Audit
+garantit une API robuste même si le front change 
 
-PostgreSQL est optimal pour :
+ 
 
-Jointures (JOIN)
+1.4  Base de données : PostgreSQL (Neon) + Prisma + Migrations 
 
-Contraintes
+1.4.1 Pourquoi PostgreSQL (vs MongoDB, MySQL, etc.) ? 
 
-Transactions
+Le domaine TaskFlow contient des données fortement relationnelles : 
 
-Cohérence forte
+Workspaces → Members → Projects → Tasks → Comments → Mentions → Notifications 
 
-Benchmark vs MongoDB
+Permissions (OWNER/MANAGER/MEMBER) 
 
-MongoDB est pertinent pour :
+Intégrité (tâches liées à projets, membres, assignations) 
 
-Données peu relationnelles
+Historique et audit fields 
 
-Schéma flexible
+PostgreSQL est excellent pour : 
 
-Mais ici :
+relations + jointures (JOIN) 
 
-Relations centrales
+contraintes (foreign keys, unique constraints) 
 
-Contraintes fortes nécessaires
+transactions 
 
-Modèle relationnel naturel
+cohérence forte des données 
 
-Choix final
+Benchmark vs MongoDB (NoSQL) 
 
-PostgreSQL correspond parfaitement au domaine métier.
+MongoDB est pertinent si : 
 
-Benchmark vs MySQL
+données peu relationnelles 
 
-MySQL est adapté, mais PostgreSQL est souvent préféré pour :
+schéma très variable 
 
-Richesse fonctionnelle
+besoin de flexibilité document 
 
-Robustesse transactionnelle
+Mais ici : 
 
-Standard SaaS/Entreprise
+les relations sont centrales (workspace membership, tasks assignment, invites) 
 
-1.4.2 Pourquoi Neon ?
+on a besoin d’intégrité et de contraintes (ex : unique workspace_id + user_id) 
 
-Neon fournit :
+les requêtes multi-collections deviennent plus complexes 
 
-PostgreSQL managé
+Choix final : PostgreSQL car il correspond naturellement à un modèle relationnel (et réduit la complexité côté code). 
 
-Mise en place rapide
+Benchmark vs MySQL 
 
-Compatible Prisma
+MySQL est aussi relationnel, mais PostgreSQL est souvent préféré pour : 
 
-Idéal en environnement dev/cloud
+fonctionnalités plus avancées (types, contraintes, requêtes) 
 
-Benchmark vs Supabase :
+robustesse transactionnelle 
 
-Supabase propose Auth + Storage + Realtime.
+écosystème “SaaS/Enterprise” très courant 
 
-Ici :
+MySQL aurait fonctionné, mais PostgreSQL est plus “standard entreprise” pour ce type d’app. 
 
-Auth déjà gérée par NestJS
+ 
 
-Logique métier personnalisée
+1.4.2 Pourquoi Neon (vs Supabase, Render, Railway…) ? 
 
-Neon évite la duplication de services.
+Neon = PostgreSQL managé optimisé pour dev/projets modernes. 
 
-1.4.3 Pourquoi Prisma ?
+Neon apporte : 
 
-Avantages :
+PostgreSQL “pur” (compatible Prisma sans friction) 
 
-Typage TypeScript fort
+provisioning rapide 
 
-Schéma central lisible
+scaling simple 
 
-Migrations intégrées
+idéal pour environnements dev (DB cloud accessible partout) 
 
-Productivité élevée
+Benchmark vs Supabase 
 
-Benchmark :
+Supabase est très bon mais c’est une plateforme plus large : 
 
-SQL brut	Prisma
-Contrôle total	Rapidité
-Maintenance complexe	Typage sécurisé
-Migrations manuelles	Migrations intégrées
+Auth, Storage, Realtime, Edge… 
 
-Choix final : Prisma pour livrer vite tout en gardant une architecture propre.
+parfois on adopte “tout Supabase” 
 
-1.5 Concepts de robustesse
-Soft Delete
+Ici, on a déjà : 
 
-Au lieu de supprimer une ligne :
+Auth dans NestJS 
 
-deleted = 1
-active = 0
+logique métier et règles d’accès custom (guards) 
 
+notifications/jobs custom 
 
-Avantages :
+Supabase aurait ajouté des composants “en plus” sans nécessité (et risquait de “dupliquer” l’auth et la logique). 
 
-Conservation de l’historique
+Benchmark vs Render/Railway (DB) 
 
-Sécurité des relations
+Render/Railway offrent aussi Postgres, mais : 
 
-Adapté contexte entreprise
+Neon est très orienté serverless/dev 
 
-Audit Fields
+mise en place souvent plus rapide pour une DB dédiée 
 
-creator_id
+bon équilibre simplicité/performance 
 
-updator_id
+Choix final : Neon car on voulait une DB Postgres simple, indépendante, plug-and-play avec Prisma. 
 
-deleted_date
+ 
 
-etc.
+1.4.3 Pourquoi Prisma + migrations (vs TypeORM, Sequelize, SQL brut) ? 
 
-Permet :
+Prisma est choisi pour : 
 
-Traçabilité
+Typage TypeScript très fort (moins d’erreurs runtime) 
 
-Conformité
+Schéma central (schema.prisma) facile à lire 
 
-Debug facilité
+Migrations intégrées et reproductibles 
 
-Enums métiers
+Productivité élevée (rapide en délai court) 
 
-Exemples :
+Benchmark vs TypeORM 
 
-TaskStatus
+TypeORM est puissant mais : 
 
-WorkspaceRole
+configuration parfois plus lourde 
 
-InviteStatus
+migrations et types moins “guidés” 
 
-Avantages :
+expérience développeur parfois moins fluide 
 
-Évite les valeurs incohérentes
+Benchmark vs SQL brut 
 
-Renforce l’intégrité
+SQL brut : 
 
-Rend le code plus lisible
+perf maximale et contrôle total 
 
-2️ Structure du Backend – Domain Driven Design (DDD léger)
-2.1 Principe : DDD “léger” orienté domaines
+beaucoup plus long à écrire 
 
-Le backend NestJS est organisé par domaines fonctionnels (features) plutôt que par séparation purement technique.
+risque d’erreurs + maintenance plus difficile 
 
-Au lieu d’avoir une structure globale comme :
+migrations à gérer manuellement 
 
-controllers/
-services/
-dto/
+Choix final : Prisma + migrations car : 
 
+le projet nécessite de livrer vite (délai) 
 
-Chaque domaine encapsule ses propres composants.
+mais en gardant une structure propre et maintenable 
 
-Chaque domaine contient :
+et des migrations reproductibles (déploiement propre) 
 
-Controller → expose les routes HTTP
+ 
 
-Service → contient la logique métier
+1.5 Concepts de robustesse : Soft delete + Audit fields + Enums 
 
-DTO → définit et valide les payloads
+Soft delete (active / deleted) 
 
-Module → assemble les dépendances
+Au lieu de supprimer physiquement une ligne : 
 
- Objectifs de cette organisation
+deleted=1 et active=0 
 
-Lisibilité : on sait immédiatement où chercher une fonctionnalité.
+conservation de l’historique 
 
-Évolutivité : ajouter un domaine n’impacte pas les autres.
+évite de casser des relations (FK) 
 
-Cohérence métier : permissions, audit, soft delete restent centralisés par feature.
+Benchmark vs hard delete : 
 
-2.2 Arborescence type
+Hard delete est simple, mais détruit l’historique et peut casser des références. 
 
-Exemple d’organisation :
+Soft delete est plus adapté au contexte entreprise (audit + traçabilité). 
 
-src/
-  auth/
-  workspaces/
-  projects/
-  tasks/
-  comments/
-  notifications/
-  attachments/
-  admin-users/
-  dashboard/
+Audit fields (creator_id, updator_id, etc.) 
 
+trace qui a créé / modifié / supprimé 
 
-Structure interne typique d’un domaine :
+utile pour conformité et debug 
 
-domain/
-  domain.controller.ts
-  domain.service.ts
-  dto/
-    create-domain.dto.ts
-    update-domain.dto.ts
-  domain.module.ts
+cohérent avec un usage entreprise 
 
-2.3 Rôle de chaque couche
-A) Controller – Interface HTTP
+Enums métiers (TaskStatus, WorkspaceRole, InviteStatus) 
 
-Le Controller :
+évite des valeurs incohérentes (ex : status libre en string) 
 
-Définit les routes (@Get, @Post, @Patch, @Delete)
+renforce la qualité des données 
 
-Applique les guards (@UseGuards(JwtAuthGuard, ...))
+rend le code plus sûr et lisible 
 
-Récupère les paramètres (@Param, @Query, @Body)
+ 
 
-Délègue la logique métier au service
+Structure du Backend (Domain Driven Design léger) 
 
- Aucune logique métier complexe ne doit être implémentée ici.
+2.1 Principe : DDD “léger” orienté domaines 
 
-Bonnes pratiques appliquées
+Le backend NestJS est organisé par domaines fonctionnels (features), au lieu d’une séparation purement technique (ex : “controllers/ services/ dto” tous mélangés). 
 
-Routes REST claires
+Chaque domaine encapsule : 
 
-Protection via Guards
+Controller : expose les routes REST (HTTP) 
 
-Validation automatique via DTO + ValidationPipe global
+Service : contient la logique métier (use-cases) 
 
-B) Service – Logique métier
+DTO : définit et valide les payloads entrants (class-validator) 
 
-Le Service :
+Module : assemble les dépendances (providers/controllers/imports) 
 
-Centralise les règles métier
+Objectif : 
 
-Orchestration Prisma (transactions si nécessaire)
+lisibilité (on sait où chercher) 
 
-Applique les règles d’accès
+évolutivité (ajouter un domaine ne casse pas le reste) 
 
-Gère les audit fields et soft delete
+maintien de règles métier cohérentes (permissions, audit, soft delete) 
 
-Avantages
+ 
 
-Logique réutilisable (ex : futurs cron jobs)
+2.2 Arborescence type 
 
-Meilleure testabilité
+Exemple de structure (par domaine) : 
 
-Pas de duplication dans les controllers
+auth/ 
 
-C) DTO – Validation & Contrats
+workspaces/ 
 
-Les DTO :
+projects/ 
 
-Définissent le contrat d’entrée
+tasks/ 
 
-Valident via class-validator
+comments/ 
 
-Protègent l’API contre les payloads invalides
+notifications/ 
 
-Exemples de validations :
+attachments/ 
 
-Email valide
+admin-users/ 
 
-Mot de passe minimum 6 caractères
+dashboard/ 
 
-Enum strict pour rôles/statuts
+Chaque dossier contient généralement : 
 
-Champs nettoyés via whitelist: true
+domain/ 
+ domain.controller.ts 
+ domain.service.ts 
+ dto/ 
+   *.dto.ts 
+ domain.module.ts 
+ 
 
-Cela garantit une API robuste et cohérente.
+ 
 
-D) Module – Assemblage
+2.3 Rôle de chaque couche 
 
-Le Module :
+A) Controller (Interface HTTP) 
 
-Déclare controllers et providers
+Le Controller : 
 
-Importe les dépendances nécessaires (ex : PrismaModule)
+définit les routes (@Get, @Post, @Patch, @Delete) 
 
-Rend le domaine autonome et “plug-and-play”
+applique les guards (@UseGuards(JwtAuthGuard, ...)) 
 
-Résultat : chaque domaine est isolé et proprement intégré dans AppModule.
+récupère les paramètres (@Param, @Query, @Body) 
 
-2.4 Exemple concret par domaine
- auth/
+délègue au service (aucune logique métier lourde ici) 
 
-Responsabilités :
+Bonnes pratiques appliquées : 
 
-Login
+routes claires et REST 
 
-Refresh token
+accès protégé par guards 
 
-Logout
+validation automatique via DTO + ValidationPipe global 
 
-Endpoint /auth/me
+ 
 
-Gestion JWT
+B) Service (Logique métier) 
 
-Stockage du refresh token hashé
+Le Service : 
 
-Contenu typique :
+centralise la logique métier (création, assignation, permissions, etc.) 
 
-auth.controller.ts
-auth.service.ts
-jwt.strategy.ts
-jwt.guard.ts
-dto/
+orchestre Prisma (transactions si nécessaire) 
 
- workspaces/
+applique les règles d’accès (ou appelle des helpers dédiés : WorkspaceAccessService, guards) 
 
-Responsabilités :
+Avantages : 
 
-Création et gestion des workspaces
+logique réutilisable (future CLI / jobs / endpoints) 
 
-Gestion des rôles (OWNER / MANAGER / MEMBER)
+testabilité facilitée 
 
-Gestion des membres
+évite la duplication dans les controllers 
 
-Invitations
+ 
 
-Contenu typique :
+C) DTO (Validation & Contrats) 
 
-workspaces.controller.ts
-workspaces.service.ts
-workspace-invites.service.ts
-dto/
+Les DTO : 
 
- tasks/
+définissent le “contrat” d’entrée attendu 
 
-Responsabilités :
+valident les données via class-validator 
 
-CRUD des tâches
+sécurisent l’API (pas de champs surprises si whitelist: true) 
 
-Assignation / réassignation
+Exemple de règles typiques : 
 
-Actions métier (ack, close, desist)
+email valide 
 
-Historique des actions
+password min 6 caractères 
 
- notifications/
+enums (roles/status) stricts 
 
-Responsabilités :
+ 
 
-Liste des notifications utilisateur
+D) Module (Assemblage) 
 
-Marquage comme lue
+Le Module : 
 
-Notifications système (deadline, invitation, etc.)
+déclare les controllers et providers du domaine 
 
- dashboard/
+importe les dépendances (ex : PrismaModule) 
 
-Responsabilité :
+rend le domaine indépendant et “plug-and-play” 
 
-Endpoint agrégé /dashboard
+Résultat : domaines isolés, intégration propre dans AppModule. 
 
-Centralise plusieurs domaines
+ 
 
-Évite au frontend d’effectuer plusieurs appels séparés
+2.4 Exemple concret par domaine 
 
-2.5 Benchmark – Pourquoi un DDD léger ?
- Structure “par type” globale
+auth/ 
 
-Alternative :
+Responsable de : 
 
-controllers/
-services/
-dto/
+login / refresh / logout 
 
+endpoints /auth/me 
 
-Limites :
+gestion JWT + stockage refresh token hashé 
 
-Navigation difficile
+éventuellement “first password” (reset_password) 
 
-Duplication possible
+Contenu typique : 
 
-Confusion quand le projet grossit
+auth.controller.ts 
 
- DDD strict (Entities / Aggregates / Repositories)
+auth.service.ts 
 
-Avantages :
+jwt.strategy.ts, jwt.guard.ts 
 
-Très robuste
+dto/ 
 
-Idéal pour très gros systèmes
+ 
 
-Limites :
+workspaces/ 
 
-Trop lourd pour un MVP
+Responsable de : 
 
-Beaucoup d’abstractions
+création et gestion workspaces 
 
-Délai de développement plus long
+rôles workspace (OWNER/MANAGER/MEMBER) 
 
- DDD léger (choix retenu)
+membres, invitations (invites), endpoints “me” (rôle dans workspace) 
 
-Organisation par feature
+Contenu typique : 
 
-Code simple et maintenable
+workspaces.controller.ts 
 
-Évolutif
+workspaces.service.ts 
 
-Livrable dans les délais
+workspace-invites.* 
 
-Cela offre un bon équilibre entre robustesse et rapidité d’exécution.
+dto/ 
 
+ 
 
-3️ Sécurité
+tasks/ 
 
-La sécurité de l’application repose sur trois piliers :
+Responsable de : 
 
-Authentification JWT (Access + Refresh)
+CRUD tâches 
 
-Autorisation par rôles (globaux + workspace)
+assignation / réassignation 
 
-Contrôles métier complémentaires côté services
+actions métier : ack, close, desist 
 
-3.1 Authentification
- JWT Access Token (15 minutes)
+events/tasks history 
 
-L’Access Token est utilisé pour authentifier chaque requête API via l’en-tête :
+ 
 
-Authorization: Bearer <accessToken>
+notifications/ 
 
+Responsable de : 
 
-Durée de validité : 15 minutes.
+liste “mes notifications” 
 
-Le token contient les informations minimales nécessaires :
+marquer comme lue 
 
-sub (user_id)
+support des notifications système (deadline, invite workspace, etc.) 
 
-email
+ 
 
-name
+dashboard/ 
 
-éventuellement global_role
+Responsable de : 
 
- Pourquoi 15 minutes ? (Benchmark)
-Durée	Avantage	Inconvénient
-5 min	Sécurité maximale	Trop de refresh
-1h	Confort UX	Risque plus long si token volé
-15 min	Bon compromis	—
+endpoint agrégé /dashboard 
 
-Choix retenu : 15 minutes
+regroupe des infos issues de plusieurs domaines (tasks, notifications, workspaces) 
 
-C’est un standard courant en production, équilibrant sécurité et expérience utilisateur.
+évite au front de faire 5 appels séparés 
 
- JWT Refresh Token (7 jours)
+ 
 
-Le Refresh Token permet d’obtenir un nouveau Access Token lorsque celui-ci expire.
+2.5 Benchmark : pourquoi cette approche “DDD léger” ? 
 
-Durée : 7 jours
+Vs structure “par type” (controllers/ services/ dto séparés globalement) 
 
-Stocké côté client (localStorage dans le MVP).
+Alternative : 
 
- Pourquoi 7 jours ? (Benchmark)
-Durée	Avantage	Inconvénient
-24h	Plus sécurisé	Reconnexion fréquente
-30 jours	UX confortable	Risque prolongé
-7 jours	Compromis équilibré	—
+controllers/, services/, dto/ au même niveau pour toute l’app 
 
-Choix retenu : 7 jours
+Limites : 
 
-Adapté à un MVP tout en restant cohérent avec des pratiques réelles.
+difficile de naviguer (tu cherches un use-case → tu sautes entre dossiers) 
 
- Refresh Tokens hashés en base (SHA-256)
+risque de duplication 
 
-Lors du login :
+augmente la confusion quand l’app grandit 
 
-Le refresh token est généré.
+Notre approche (par domaine) : 
 
-Il est renvoyé au client.
+regroupe tout ce qui concerne une feature au même endroit 
 
-En base, seul son hash est stocké :
+facilite la maintenance et l’évolution 
 
-token_hash = sha256(refreshToken)
+ 
 
-Avantages
+Vs “DDD strict” (Entities, Aggregates, Repositories séparés) 
 
-Si la base de données est compromise, les refresh tokens ne sont pas exploitables.
+DDD strict : 
 
-Possibilité de révocation (logout).
+très robuste pour gros systèmes 
 
-Compatible avec rotation future des tokens.
+trop lourd pour un MVP / délai court 
 
- Benchmark vs stockage en clair
-Méthode	Risque
-En clair	Très dangereux si fuite DB
-Hashé	Standard sécurité
+demande beaucoup de classes et abstractions 
 
-Choix retenu : stockage hashé
+DDD léger : 
 
-3.2 Autorisation
- Rôles globaux (plateforme)
+garde l’essentiel (domaine = feature) 
 
-Deux rôles principaux :
+conserve un code simple et livrable rapidement 
 
-ADMIN
+laisse la porte ouverte à une complexification future si nécessaire 
 
-USER
+Sécurité 
 
-Exemple d’utilisation :
+3.1 Authentification 
 
-AdminGuard → req.user.global_role === 'ADMIN'
+JWT Access Token (15 min) 
 
+Utilisé pour authentifier chaque requête API via l’en-tête : 
+Authorization: Bearer <accessToken> 
 
-Routes protégées via :
+Durée courte (15 minutes) pour limiter l’impact en cas de fuite de token. 
 
-@UseGuards(JwtAuthGuard, AdminGuard)
+Contient les informations minimales nécessaires : 
 
- Benchmark vs permissions fines
-Modèle	Avantage	Complexité
-RBAC/ABAC avancé	Très précis	Complexe
-Rôles simples	Lisible	Limité
+sub (user_id) 
 
-Choix MVP : rôles simples
+email 
 
-Suffisant, rapide à auditer, adapté au délai.
+name 
 
- Rôles par Workspace (niveau domaine)
+(optionnel) global_role si on veut l’utiliser côté guards 
 
-Un utilisateur peut avoir un rôle différent selon le workspace :
+Pourquoi 15 min ? (benchmark) 
 
-OWNER
+Plus court (ex: 5 min) : meilleure sécurité, mais plus de refresh → plus de friction et charge serveur. 
 
-MANAGER
+Plus long (ex: 1h) : moins de refresh, mais un token volé reste exploitable plus longtemps. 
 
-MEMBER
+Compromis choisi (15 min) : standard en production pour équilibrer UX + sécurité. 
 
-Ces rôles sont stockés dans WorkspaceMember.
+ 
 
-Pourquoi séparer rôle global et rôle workspace ?
+JWT Refresh Token (7 jours) 
 
-Un utilisateur peut être :
+Sert uniquement à récupérer un nouveau access token quand celui-ci expire. 
 
-USER global
+Durée longue (7 jours) pour une UX fluide (pas de reconnexion fréquente). 
 
-OWNER dans un workspace
+Stocké côté client (localStorage dans votre MVP). 
 
-MEMBER dans un autre
+Pourquoi 7 jours ? (benchmark) 
 
-Cela reflète les outils réels (Notion, Asana, Jira).
+24h : plus secure, mais relogin fréquent. 
 
- Guards NestJS
+30 jours : meilleur confort, mais risque plus long si token fuit. 
 
-Protection des routes via :
+7 jours : compromis réaliste + pratique en projet académique/MVP. 
 
-JwtAuthGuard → vérifie le token
+ 
 
-AdminGuard → vérifie rôle global
+Refresh tokens hashés en base (SHA-256) 
 
-Vérifications supplémentaires dans les services
+Au login : 
 
- Pourquoi Guards + vérifications service ?
-Approche	Limite
-Guards seuls	Insuffisant pour permissions contextuelles
-Service seul	Répétitif
+Le refresh token est généré et renvoyé au client. 
 
-Choix retenu : combinaison des deux
+En base, on ne stocke pas le refresh token en clair, mais son hash : 
 
-Guard = contrôle d’accès général
+token_hash = sha256(refreshToken) 
 
-Service = règles métier contextualisées (workspaceId, taskId…)
+Avantages : 
 
-3.3 Premier login sécurisé (reset_password)
- Champ reset_password
+Si la base de données fuite, l’attaquant ne récupère pas les refresh tokens. 
 
-Ajout dans le modèle User :
+Possibilité de révocation (logout, rotation, audit). 
 
-reset_password = 0 → mot de passe temporaire
+Benchmark vs stockage en clair 
 
-reset_password = 1 → accès normal
+En clair : plus simple, mais énorme risque si DB compromise. 
 
-Scénario
+Hashé (choix retenu) : standard sécurité, simple à implémenter, très efficace. 
 
-Admin crée un utilisateur avec mot de passe temporaire.
+ 
 
-À la première connexion :
+3.2 Autorisation 
 
-Login autorisé
+Rôles globaux (plateforme) 
 
-Si reset_password = 0, redirection obligatoire vers page changement mot de passe.
+ADMIN : accès aux routes d’administration (ex: gestion utilisateurs) 
 
-Après modification :
+USER : utilisateur normal 
 
-reset_password = 1
+Utilisation typique : 
 
-Pourquoi autoriser le login initial ?
+AdminGuard contrôle req.user.global_role === 'ADMIN' 
 
-Nous avons besoin d’un utilisateur authentifié (JWT valide) pour sécuriser l’endpoint :
+protégé par JwtAuthGuard + AdminGuard 
 
-PATCH /auth/first-password
+Benchmark vs permissions fines 
 
+Permissions fines (RBAC/ABAC) : très robuste, mais coûteux à maintenir. 
 
-Cela évite d’exposer un endpoint public de modification de mot de passe.
+Rôles simples (choix MVP) : suffisant, clair, rapide à auditer. 
 
-Endpoint dédié
-PATCH /auth/first-password
+ 
 
+Rôles workspace (niveau domaine) 
 
-Protégé par :
+Un utilisateur peut avoir un rôle différent selon le workspace : 
 
-JwtAuthGuard
+OWNER : gestion complète (membres, projets, tâches, paramètres) 
 
+MANAGER : gestion projets/tâches (assign/reassign, edit/delete TODO) 
 
-Logique :
+MEMBER : exécution (accuser réception, clôturer, se désister) 
 
-Vérifie reset_password === 0
+Ces rôles sont stockés dans WorkspaceMember. 
 
-Hash du nouveau mot de passe (bcrypt)
+Benchmark : global role vs workspace role 
 
-Mise à jour reset_password = 1
+Tout en global role : simple mais pas réaliste (un user peut être admin partout par erreur). 
 
- Benchmark vs lien reset par email
-Méthode	Avantage	Complexité
-Email + token	Très sécurisé	SMTP + gestion tokens
-reset_password flag	Simple	Moins complet
+Rôles par workspace (choix retenu) : plus proche des outils réels (Notion, Asana, Jira). 
 
-Choix retenu : reset_password flag
+ 
 
-Adapté au délai et cohérent pour un MVP.
+Guards NestJS pour protéger les routes 
+
+Mécanisme standard NestJS : 
+
+JwtAuthGuard : vérifie token + injecte req.user 
+
+AdminGuard : bloque si pas ADMIN 
+
+contrôles métier supplémentaires dans les services (ex: OWNER only) 
+
+Pourquoi guards + vérifs service ? (benchmark) 
+
+Guards seuls : bien mais parfois insuffisant (permissions contextuelles). 
+
+Services seuls : possible mais répétitif et moins centralisé. 
+
+Mix Guards + règles en services (choix retenu) : 
+
+Guard = “porte d’entrée” 
+
+Service = règles métier contextualisées (workspaceId, projet, task…) 
+
+ 
+
+3.3 Premier login sécurisé (reset_password) 
+
+Champ reset_password 
+
+Ajout dans User : 
+
+reset_password = 0 → l’utilisateur doit changer son mot de passe 
+
+reset_password = 1 → accès normal 
+
+Scénario : 
+
+Admin crée un utilisateur avec un mot de passe temporaire. 
+
+À la première connexion : 
+
+si reset_password = 0 → on laisse le login passer mais on force une redirection vers une page “Changer mot de passe” 
+
+Une fois changé : 
+
+on met reset_password = 1 
+
+Pourquoi laisser la connexion passer ? 
+
+On a besoin d’un utilisateur authentifié (JWT) pour sécuriser l’endpoint “set password”. 
+
+Ça évite d’exposer un endpoint non-auth qui modifierait le mot de passe. 
+
+ 
+
+Endpoint dédié (ex: PATCH /auth/first-password) 
+
+Protégé par JwtAuthGuard 
+
+Vérifie que reset_password === 0 
+
+Hash le nouveau password (bcrypt) 
+
+Met reset_password = 1 
+
+Benchmark vs “lien reset email” 
+
+Lien email type “forgot password” : 
+
+très sécurisé en prod 
+
+nécessite SMTP, tokens, pages dédiées 
+
+reset_password flag (choix MVP) : 
+
+rapide, simple, efficace 
+
+répond à la contrainte “première connexion” 
+
+idéal pour projet avec délai court 
+
+Fonctionnalités principales 
+
+4.1 Gestion des Workspaces 
+
+Objectif : permettre d’organiser le travail par espaces indépendants. 
+
+Ce qui est fait 
+
+Création d’un workspace 
+
+Liste des workspaces accessibles par l’utilisateur connecté (/workspaces/me) 
+
+Paramètres workspace : 
+
+renommage 
+
+activation/désactivation (toggle-active) 
+
+soft delete 
+
+Choix techniques 
+
+WorkspaceMember (table de liaison) pour gérer un rôle différent par workspace (OWNER/MANAGER/MEMBER) 
+
+Contrôle d’accès : un utilisateur doit être membre pour accéder aux infos/membres/projets du workspace 
+
+ 
+
+4.2 Gestion des membres 
+
+Objectif : maîtriser qui a accès à un workspace. 
+
+Ce qui est fait 
+
+Liste des membres d’un workspace (GET /workspaces/:workspaceId/members) 
+
+Retrait d’un membre (DELETE /workspaces/:workspaceId/members/:memberId) 
+
+Règles d’autorisation : 
+
+OWNER : tout gérer 
+
+MANAGER : gestion tâches/projets (selon règles) 
+
+MEMBER : exécution des tâches 
+
+Choix techniques 
+
+Vérifs d’accès en service (métier) + Guard JWT (sécurité) 
+
+Rôles stockés en DB = logique stable côté back (pas seulement côté UI) 
+
+ 
+
+4.3 Invitations 
+
+Objectif : inviter un utilisateur à rejoindre un workspace sans l’ajouter directement. 
+
+Ce qui est fait 
+
+Création d’invitation (POST /workspaces/:workspaceId/invites) 
+
+Liste des invitations (GET /workspaces/:workspaceId/invites) 
+
+Révocation (DELETE /workspaces/:workspaceId/invites/:inviteId) 
+
+Choix techniques 
+
+Token d’invitation généré aléatoirement, stocké hashé (SHA-256) en base 
+
+Statuts d’invitation via enum InviteStatus : PENDING, ACCEPTED, REVOKED, EXPIRED 
+
+Lien d’invitation généré côté backend (MVP), utilisable par le front 
+
+Pourquoi hash token ? 
+Même logique que refresh tokens : si DB compromise, le token n’est pas récupérable en clair. 
+
+ 
+
+4.4 Projets 
+
+Objectif : structurer le travail dans un workspace. 
+
+Ce qui est fait 
+
+Création projet dans un workspace (POST /workspaces/:workspaceId/projects) 
+
+Liste des projets d’un workspace (GET /workspaces/:workspaceId/projects) 
+
+Détails + mise à jour + suppression soft (/projects/:projectId) 
+
+Choix techniques 
+
+Un projet appartient à un workspace 
+
+Un owner de projet est stocké (traçabilité : responsable principal) 
+
+ 
+
+4.5 Tâches 
+
+Objectif : gérer le cycle de vie complet des tâches. 
+
+Ce qui est fait 
+
+CRUD tâches par projet (/projects/:projectId/tasks, /tasks/:taskId) 
+
+Statuts TaskStatus : 
+
+TODO → DOING → DONE 
+
+ 
+
+DESISTE (désistement) 
+
+Assignation (PATCH /tasks/:taskId/assign) 
+
+Accuser réception / démarrer (PATCH /tasks/:taskId/ack) 
+
+Clôturer (PATCH /tasks/:taskId/close) 
+
+Désistement (PATCH /tasks/:taskId/desist) 
+
+Réassignation (PATCH /tasks/:taskId/reassign) 
+
+Règles d’accès (exemples) 
+
+MEMBER : 
+
+peut accuser réception et clôturer uniquement s’il est assigné 
+
+peut se désister s’il est assigné 
+
+MANAGER/OWNER : 
+
+peut assigner et réassigner 
+
+peut modifier/supprimer une tâche tant qu’elle est TODO 
+
+Choix techniques 
+
+On conserve assignee_id_old lors d’un désistement (audit & traçabilité) 
+
+Désistement crée un état exploitable par l’UI (statut DESISTE) + infos desist_reason, desist_comment 
+
+ 
+
+4.6 Commentaires avec mentions 
+
+Objectif : discussions contextualisées au niveau d’une tâche + ping ciblé. 
+
+Ce qui est fait 
+
+Ajout commentaire (POST /tasks/:taskId/comments) 
+
+Liste commentaires (GET /tasks/:taskId/comments) 
+
+Mentions via table CommentMention : 
+
+relation commentaire ↔ utilisateur mentionné 
+
+Choix techniques 
+
+Table dédiée CommentMention (plutôt qu’un champ texte) : 
+
+permet requêtes propres : “qui est mentionné ?” 
+
+permet notifications ciblées fiables 
+
+ 
+
+4.7 Notifications 
+
+Objectif : centraliser l’activité importante (deadline proche, invitations, mentions, etc.). 
+
+Ce qui est fait 
+
+Liste des notifications de l’utilisateur connecté (GET /notifications/me) 
+
+Marquer comme lue (PATCH /notifications/:notificationId/read) 
+
+Compteur non-lu exploitable par le Header 
+
+Choix techniques 
+
+read en 0/1 (compatible soft delete + simplicité) 
+
+Index DB sur user_id + read pour accélérer “unread count” et listing 
+
+ 
+
+4.8 Dashboard global 
+
+Objectif : donner une vue rapide “priorités + alertes + accès rapide”. 
+
+Ce qui est fait 
+
+Endpoint GET /dashboard qui renvoie : 
+
+compteurs (overdue, dueSoon, TODO, notifications non-lues) 
+
+aperçu tâches urgentes 
+
+workspaces récents 
+
+Choix techniques 
+
+Un endpoint agrégateur “dashboard” évite au front d’appeler 6 endpoints séparés 
+
+Permet un affichage plus rapide et cohérent (un seul aller-retour réseau) 
+
+ 
+
+4.9 Upload pièces jointes 
+
+Objectif : associer des fichiers à une tâche. 
+
+Ce qui est fait 
+
+Upload fichier pour une tâche (POST /tasks/:taskId/attachments) 
+
+Liste des pièces jointes d’une tâche (GET /tasks/:taskId/attachments) 
+
+Suppression (DELETE /attachments/:attachmentId) 
+
+Fichiers servis statiquement via /uploads/... 
+
+Choix techniques 
+
+Stockage local en MVP (simple, rapide, pas de dépendance S3) 
+
+Méta-données enregistrées en DB : file_name, url, content_type, file_size 
+
+Possibilité future de migrer vers S3 sans changer le modèle fonctionnel 
+
+ 
+
+4.10 Cron job : notification “deadline proche” 
+
+Objectif : prévenir automatiquement un utilisateur si une tâche arrive à échéance. 
+
+Ce qui est fait 
+
+Job planifié @nestjs/schedule toutes les heures 
+
+Sélection des tâches dont la deadline est dans les prochaines 24h 
+
+Création d’une notification si elle n’existe pas déjà 
+
+Anti-duplicate 
+
+type unique basé sur : 
+TASK_DEADLINE_SOON:{taskId}:{YYYY-MM-DD} 
+
+Vérifie existence avant création 
+
+Choix techniques 
+
+Prisma findMany + boucle : 
+
+lisible, maintenable, suffisant MVP 
+
+UTC pour la clé jour : 
+
+évite incohérences selon timezone serveur 
+
+ 
+
+Choix techniques importants 
+
+Pourquoi NestJS ? 
+
+NestJS a été choisi comme framework backend car il fournit une base “entreprise-ready” dès le départ, sans réinventer l’architecture. 
+
+Points clés 
+
+Architecture propre et modulaire 
+
+Un module par domaine (auth, workspaces, tasks, etc.) 
+
+Séparation claire Controller / Service / DTO 
+
+Facilite la maintenance et l’évolution (ajout de features sans casser le reste) 
+
+Support natif de l’écosystème sécurité 
+
+Intégration robuste de Passport, JWT, Guards, Decorators 
+
+Contrôle d’accès clair via JwtAuthGuard, AdminGuard, etc. 
+
+Standardisation 
+
+Les patterns NestJS sont proches des standards backend (Spring-like) 
+
+Onboarding plus simple pour d’autres devs 
+
+Scalabilité organisationnelle 
+
+Même si le projet reste “MVP”, la structure est déjà prête pour grandir (services, modules, tests, etc.) 
+
+Benchmark rapide 
+
+vs Express “pur” : plus flexible mais architecture à construire soi-même (risque de dette technique + incohérences). 
+
+vs Fastify : très performant mais moins “opinionated” sur l’architecture globale. 
+
+vs Django/Flask (Python) : bon mais on perd l’écosystème TypeScript partagé avec le front. 
+
+ 
+
+			Pourquoi Prisma ? 
+
+Prisma est utilisé comme ORM pour gagner en productivité tout en gardant une forte sécurité de typage. 
+
+Points clés 
+
+Typage strict TypeScript 
+
+Les modèles Prisma génèrent des types auto → moins d’erreurs runtime 
+
+Autocomplétion très efficace 
+
+Migrations simples et traçables 
+
+Les changements de schéma sont versionnés 
+
+Historique clair des évolutions DB (important en équipe) 
+
+Productivité élevée 
+
+CRUD rapide 
+
+Relations faciles (workspace → members → user, etc.) 
+
+Sécurité 
+
+Moins de SQL raw = moins de risques d’injection 
+
+Contrôles cohérents via schéma 
+
+Benchmark rapide 
+
+vs TypeORM : plus “class-based”, mais migrations souvent plus fragiles et typage moins fiable en pratique. 
+
+vs Sequelize : mature mais typage TS moins strict / DX moins moderne. 
+
+vs SQL brut : performant mais coûteux en temps + maintenance, surtout sur un MVP. 
+
+ 
+
+Pourquoi Soft Delete ? 
+
+Le soft delete (champs active / deleted) a été choisi pour préserver l’historique et faciliter l’audit. 
+
+Points clés 
+
+Historique conservé 
+
+On ne perd pas les données (utile pour retrouver un workspace/projet/tâche supprimé) 
+
+Pas de suppression destructrice 
+
+Évite des erreurs irréversibles en production 
+
+Audit et traçabilité 
+
+Avec deleted_date, deletor_id, on sait qui a fait quoi et quand 
+
+Protection des relations 
+
+Une suppression “hard” casse facilement des FK ou rend les historiques incohérents 
+
+Benchmark rapide 
+
+vs hard delete : plus “propre” en DB mais risque de perte de données et problèmes relationnels. 
+
+vs archive séparée : plus complexe (tables miroir, jobs de transfert), pas nécessaire pour un MVP. 
+
+ 
+
+Pourquoi PostgreSQL plutôt que MongoDB ? 
+
+PostgreSQL est plus adapté ici car le projet est très relationnel. 
+
+Points clés 
+
+Données fortement relationnelles 
+
+Workspaces ↔ Members ↔ Users ↔ Projects ↔ Tasks ↔ Comments ↔ Notifications 
+
+Les jointures et contraintes d’intégrité sont centrales 
+
+Transactions 
+
+Création workspace + ajout membre OWNER dans une transaction (cohérence garantie) 
+
+Contraintes & intégrité 
+
+@@unique([workspace_id, user_id]), enums, relations → sécurité forte côté DB 
+
+Requêtes analytiques 
+
+Dashboard, counts, overdue/dueSoon → très naturel en SQL 
+
+Benchmark rapide 
+
+MongoDB : très bon pour documents flexibles, mais ici les relations + contraintes + reporting rendent SQL plus fiable et plus simple. 
+
+MySQL : possible aussi, mais Postgres est souvent préféré pour ses fonctionnalités avancées et son écosystème. 
+
+ 
+
+Pourquoi Neon (PostgreSQL cloud) plutôt que Supabase / Render ? 
+
+Neon a été choisi pour un déploiement PostgreSQL cloud simple, rapide et adapté à un MVP. 
+
+Points clés 
+
+PostgreSQL managé très simple 
+
+Création DB rapide, connexion directe via DATABASE_URL 
+
+Très adapté dev + production légère 
+
+Suffisant pour un MVP (petite charge) 
+
+Coût/gestion 
+
+Pas besoin de gérer un serveur DB soi-même 
+
+Benchmark rapide 
+
+Supabase : 
+
+Excellent produit, mais plus “plateforme” (auth, storage, realtime) → surdimensionné si on veut maîtriser notre auth/JWT et notre architecture. 
+
+Render : 
+
+Très bien pour héberger des services, mais DB Postgres peut coûter plus cher selon la config, et la gestion peut être un peu moins “DB-first” que Neon. 
+
+Railway : 
+
+Simple aussi, mais modèle de pricing et stabilité peuvent varier selon usage. 
+
+ Instructions de Déploiement 
+
+Prérequis 
+
+Node.js ≥ 18 (recommandé : 20+) 
+
+PostgreSQL (local) ou Neon 
+
+npm (ou pnpm) 
+
+ 
+
+Installation 
+
+1 Cloner le projet 
+
+git clone <repo-url> 
+cd taskflow 
+ 
+
+2 Installer les dépendances 
+
+Backend 
+
+cd apps/api 
+npm install 
+ 
+
+Frontend 
+
+cd ../web 
+npm install 
+ 
+
+ 
+
+ Configuration Backend (NestJS) 
+
+1 Créer un fichier .env dans apps/api 
+
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require" 
+ 
+JWT_ACCESS_SECRET=supersecret1 
+JWT_REFRESH_SECRET=supersecret2 
+ 
+API_PORT=3001 
+FRONT_URL=http://localhost:3000 
+ 
+
+Notes 
+
+Si tu utilises Neon, tu colles directement le DATABASE_URL fourni. 
+
+sslmode=require est souvent nécessaire en cloud (Neon). 
+
+ 
+
+Migration Base de données (Prisma) 
+
+Depuis apps/api : 
+
+npx prisma generate 
+npx prisma migrate dev 
+ 
+
+generate : génère le client Prisma (types TypeScript). 
+ migrate dev : applique les migrations + met à jour la DB. 
+
+ 
+
+ Lancer le backend 
+
+Toujours dans apps/api : 
+
+npm run dev 
+ 
+
+API disponible sur : 
+http://localhost:3001 
+
+ 
+
+ Configuration Frontend (Next.js) 
+
+Créer un fichier .env.local dans apps/web 
+
+NEXT_PUBLIC_API_URL=http://localhost:3001 
+ 
+
+ 
+
+ Lancer le frontend 
+
+Depuis apps/web : 
+
+npm run dev 
+ 
+
+Application disponible sur : 
+http://localhost:3000 
+
+ 				Utilisation 
+
+1) Créer un premier utilisateur (bootstrap) 
+
+Endpoint 
+
+POST /auth/register 
+
+Objectif 
+
+Créer le premier compte (souvent un compte ADMIN/OWNER initial selon ta stratégie). 
+Ensuite, tu peux créer d’autres utilisateurs via l’admin ou invitations. 
+
+Exemple (JSON) 
+
+{ 
+ "email": "admin@taskflow.com", 
+ "password": "Admin123!", 
+ "name": "Admin" 
+} 
+ 
+
+ 
+
+2) Connexion 
+
+Endpoint 
+
+POST /auth/login 
+
+Objectif 
+
+Authentifier l’utilisateur et récupérer les tokens : 
+
+accessToken (court, utilisé pour les appels API) 
+
+refreshToken (long, utilisé pour renouveler l’access) 
+
+Exemple (JSON) 
+
+{ 
+ "email": "admin@taskflow.com", 
+ "password": "Admin123!" 
+} 
+ 
+
+Réponse typique 
+
+{ 
+ "accessToken": "xxx", 
+ "refreshToken": "yyy" 
+} 
+ 
+
+Utilisation dans les requêtes suivantes : 
+Ajouter le header : 
+Authorization: Bearer <accessToken> 
+
+ 
+
+3) Créer un workspace 
+
+Endpoint 
+
+POST /workspaces 
+
+Conditions 
+
+Utilisateur connecté (JWT requis) 
+
+Exemple (JSON) 
+
+{ 
+ "name": "Workspace Marketing" 
+} 
+ 
+
+Résultat 
+
+Le workspace est créé 
+
+Le créateur est automatiquement ajouté comme OWNER 
+
+ 
+
+4) Inviter des membres dans un workspace 
+
+Endpoint 
+
+POST /workspaces/:workspaceId/invites 
+
+Conditions 
+
+JWT requis 
+
+Rôle nécessaire : OWNER (ou OWNER/MANAGER selon ta règle) 
+
+Une invitation est créée et peut aussi générer une notification côté utilisateur 
+
+Exemple (JSON) 
+
+{ 
+ "email": "user@taskflow.com", 
+ "role": "MEMBER" 
+} 
+ 
+
+Résultat typique 
+
+Invitation créée (status PENDING) 
+
+(Optionnel) un lien d’invitation peut être renvoyé côté front (ex: invite_link) 
+
+ 
+
+5) Créer des projets et des tâches 
+
+Créer un projet 
+
+Endpoint 
+
+POST /workspaces/:workspaceId/projects 
+
+Exemple (JSON) 
+
+{ 
+ "name": "Refonte Site Web", 
+ "description": "Projet de refonte UI/UX" 
+} 
+ 
+
+ 
+
+Créer une tâche 
+
+Endpoint 
+
+POST /projects/:projectId/tasks 
+
+Exemple (JSON) 
+
+{ 
+ "title": "Créer la maquette Figma", 
+ "description": "Maquette page d'accueil", 
+ "priority": "HIGH", 
+ "deadline": "2026-02-20T18:00:00.000Z", 
+ "assignee_id": "cuid_user_id_optionnel" 
+} 
+
+8 Points d’Amélioration possibles 
+
+1) Tests (qualité & fiabilité) 
+
+Tests unitaires (services, helpers, règles métier) 
+
+Tests d’intégration (API + DB via Prisma) 
+
+Tests E2E (parcours complet : login → workspace → tâche → notification) 
+
+Pourquoi ? Réduit les régressions et sécurise les évolutions. 
+
+ 
+
+2) Documentation API (Swagger / OpenAPI) 
+
+Ajouter @nestjs/swagger pour générer automatiquement : 
+
+endpoints 
+
+DTO 
+
+codes d’erreurs 
+
+auth Bearer 
+
+Pourquoi ? Facilite l’intégration, le debug, et la maintenance. 
+
+ 
+
+3) Dockerisation complète 
+
+Dockerfile pour apps/api + apps/web 
+
+docker-compose.yml incluant : 
+
+API 
+
+Front 
+
+PostgreSQL (si non utilisé via Neon) 
+
+(optionnel) Adminer/pgAdmin 
+
+Pourquoi ? Déploiement reproductible et simple pour n’importe quel environnement. 
+
+ 
+
+4) CI/CD (automatisation) 
+
+GitHub Actions / GitLab CI : 
+
+lint + build 
+
+tests 
+
+migrations Prisma 
+
+déploiement automatique (Neon + Vercel/Render/Fly.io) 
+
+Pourquoi ? Standard “entreprise”, évite les déploiements manuels à risque. 
+
+ 
+
+5) Rate limiting & sécurité API 
+
+@nestjs/throttler (limitation par IP / route) 
+
+Protection brute-force sur /auth/login 
+
+Headers sécurité (helmet) 
+
+Validation stricte des payloads (déjà en place via ValidationPipe) 
+
+Pourquoi ? Empêche les abus et renforce la sécurité. 
+
+ 
+
+6) Logs centralisés & observabilité 
+
+Logger structuré (pino/winston) 
+
+Centralisation (ex: Logtail, Datadog, Grafana Loki) 
+
+Ajout de métriques (latence, erreurs, jobs cron) 
+
+Alerting (erreurs 500, DB down, cron failing) 
+
+ Conclusion 
+
+TaskFlow est une application SaaS modulaire conçue selon des standards d’architecture modernes et orientés entreprise. 
+
+Elle repose sur : 
+
+Une architecture REST claire et découplée 
+Frontend (Next.js) séparé du Backend (NestJS), facilitant la scalabilité et la maintenance. 
+
+Une sécurité robuste basée sur JWT 
+
+Access Token court (15 min) 
+
+Refresh Token sécurisé et hashé en base 
+
+Guards NestJS pour protéger les routes sensibles 
+
+Un système de rôles hiérarchiques structuré 
+
+Rôles globaux : ADMIN / USER 
+
+Rôles Workspace : OWNER / MANAGER / MEMBER 
+Permettant un contrôle fin des permissions. 
+
+Audit et traçabilité complète 
+
+Soft delete (active / deleted) 
+
+Champs d’audit (creator_id, updator_id, deleted_date, etc.) 
+
+Historique des actions via TaskEvent 
+
+Notifications automatiques et intelligentes 
+
+Mentions utilisateurs 
+
+Invitations workspace 
+
+Cron job pour deadlines proches 
+
+Suivi d’activité en temps réel 
+
+Conception orientée entreprise 
+
+Modularité forte (DDD léger) 
+
+Typage strict via Prisma + TypeScript 
+
+Structure prête pour CI/CD et Docker 
+
+Séparation claire des responsabilités 
+
+ 
+
+Vision globale 
+
+TaskFlow n’est pas seulement une application de gestion de tâches : 
+c’est une base SaaS évolutive, pensée pour : 
+
+La sécurité 
+
+La scalabilité 
+
+La maintenabilité 
+
+La traçabilité métier 
+
+Elle peut facilement évoluer vers : 
+
+Multi-tenancy avancé 
+
+Système de facturation 
+
+Permissions fines par projet 
+
+Microservices à grande échelle 
