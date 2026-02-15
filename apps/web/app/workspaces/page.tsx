@@ -9,10 +9,13 @@ import EditWorkspaceModal from '@/components/workspaces/EditWorkspaceModal';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { Plus, PencilLine, Trash2, Power, Search, X } from 'lucide-react';
 
+type WorkspaceRole = 'OWNER' | 'MANAGER' | 'MEMBER';
+
 type Workspace = {
   workspace_id: string;
   name: string;
   active?: number;
+  role?: WorkspaceRole; // ✅ role renvoyé par /workspaces/me
 };
 
 function StatusPill({ active }: { active: number }) {
@@ -28,6 +31,20 @@ function StatusPill({ active }: { active: number }) {
       {isActive ? 'Actif' : 'Désactivé'}
     </span>
   );
+}
+
+/** ✅ Permissions UI (MVP) */
+function canCreateProject(role?: WorkspaceRole) {
+  return role === 'OWNER' || role === 'MANAGER';
+}
+function canRenameWorkspace(role?: WorkspaceRole) {
+  return role === 'OWNER';
+}
+function canToggleWorkspace(role?: WorkspaceRole) {
+  return role === 'OWNER';
+}
+function canDeleteWorkspace(role?: WorkspaceRole) {
+  return role === 'OWNER';
 }
 
 export default function WorkspacesPage() {
@@ -82,7 +99,7 @@ export default function WorkspacesPage() {
   async function loadWorkspaces() {
     setError(null);
     const data = await apiFetch<any>('/workspaces/me');
-    const list: Workspace[] = Array.isArray(data) ? data : (data.items ?? data.workspaces ?? []);
+    const list: Workspace[] = Array.isArray(data) ? data : data.items ?? data.workspaces ?? [];
     setWorkspaces(list);
   }
 
@@ -115,7 +132,7 @@ export default function WorkspacesPage() {
 
       setWsName('');
       await loadWorkspaces();
-      showFeedback('success', 'Workspace créé', 'Le workspace a été créé ');
+      showFeedback('success', 'Workspace créé', 'Le workspace a été créé.');
     } catch (e: any) {
       const msg = e?.message ?? 'Erreur création workspace';
       setError(msg);
@@ -135,9 +152,9 @@ export default function WorkspacesPage() {
           setRowBusyId(ws.workspace_id);
           await apiFetch(`/workspaces/${ws.workspace_id}/toggle-active`, { method: 'PATCH' });
           await loadWorkspaces();
-          showFeedback('success', 'Workspace mis à jour', 'Statut actif modifié ');
+          showFeedback('success', 'Workspace mis à jour', 'Statut actif modifié.');
         } catch (err: any) {
-          showFeedback('error', 'Erreur', err?.message ?? 'Impossible de modifier ');
+          showFeedback('error', 'Erreur', err?.message ?? 'Impossible de modifier.');
         } finally {
           setRowBusyId(null);
         }
@@ -156,9 +173,9 @@ export default function WorkspacesPage() {
           setRowBusyId(ws.workspace_id);
           await apiFetch(`/workspaces/${ws.workspace_id}`, { method: 'DELETE' });
           await loadWorkspaces();
-          showFeedback('success', 'Workspace supprimé', 'Workspace supprimé ');
+          showFeedback('success', 'Workspace supprimé', 'Workspace supprimé.');
         } catch (err: any) {
-          showFeedback('error', 'Erreur', err?.message ?? 'Suppression impossible ');
+          showFeedback('error', 'Erreur', err?.message ?? 'Suppression impossible.');
         } finally {
           setRowBusyId(null);
         }
@@ -195,13 +212,7 @@ export default function WorkspacesPage() {
 
   return (
     <>
-      <FeedbackModal
-        open={fbOpen}
-        type={fbType}
-        title={fbTitle}
-        message={fbMessage}
-        onClose={() => setFbOpen(false)}
-      />
+      <FeedbackModal open={fbOpen} type={fbType} title={fbTitle} message={fbMessage} onClose={() => setFbOpen(false)} />
 
       <ConfirmModal
         open={confirmOpen}
@@ -250,10 +261,10 @@ export default function WorkspacesPage() {
                 });
 
                 await loadWorkspaces();
-                showFeedback('success', 'Workspace mis à jour', 'Nom modifié ');
+                showFeedback('success', 'Workspace mis à jour', 'Nom modifié.');
                 setEditWorkspaceOpen(false);
               } catch (e: any) {
-                showFeedback('error', 'Erreur', e?.message ?? 'Impossible ');
+                showFeedback('error', 'Erreur', e?.message ?? 'Impossible.');
               } finally {
                 setLoading(false);
               }
@@ -328,16 +339,12 @@ export default function WorkspacesPage() {
           </div>
         </div>
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-        ) : null}
+        {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
         <section className="rounded-3xl border border-slate-200/60 bg-white shadow-soft p-5 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="text-lg font-extrabold text-gia-navy">Mes workspaces</div>
-            <span className="rounded-full bg-gia-orange/10 px-3 py-1 text-xs font-extrabold text-gia-navy">
-              {filtered.length}
-            </span>
+            <span className="rounded-full bg-gia-orange/10 px-3 py-1 text-xs font-extrabold text-gia-navy">{filtered.length}</span>
           </div>
 
           <div className="overflow-auto rounded-3xl border border-slate-200/60">
@@ -360,6 +367,13 @@ export default function WorkspacesPage() {
                 ) : (
                   filtered.map((ws) => {
                     const isBusy = rowBusyId === ws.workspace_id;
+
+                    const role: WorkspaceRole = (ws.role as WorkspaceRole) ?? 'MEMBER';
+                    const canProject = canCreateProject(role);
+                    const canRename = canRenameWorkspace(role);
+                    const canToggle = canToggleWorkspace(role);
+                    const canDel = canDeleteWorkspace(role);
+
                     return (
                       <tr
                         key={ws.workspace_id}
@@ -374,6 +388,7 @@ export default function WorkspacesPage() {
                             <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-gia-navy to-gia-navy2" />
                             <div className="min-w-0">
                               <div className="font-extrabold text-gia-text truncate">{ws.name}</div>
+                              <div className="text-xs text-slate-500 mt-0.5">Rôle : {role}</div>
                             </div>
                           </div>
                         </td>
@@ -386,9 +401,13 @@ export default function WorkspacesPage() {
                           <div className="flex flex-wrap gap-2">
                             <button
                               onClick={() => router.push(`/workspaces/${ws.workspace_id}?createProject=1`)}
-                              disabled={loading || isBusy}
-                              className="inline-flex items-center gap-2 rounded-2xl bg-gia-navy px-3.5 py-2 text-xs font-extrabold text-white hover:bg-gia-navy2 disabled:opacity-60"
+                              disabled={loading || isBusy || !canProject}
+                              className={[
+                                'inline-flex items-center gap-2 rounded-2xl bg-gia-navy px-3.5 py-2 text-xs font-extrabold text-white hover:bg-gia-navy2 disabled:opacity-60',
+                                !canProject ? 'cursor-not-allowed' : '',
+                              ].join(' ')}
                               type="button"
+                              title={!canProject ? 'Réservé aux OWNER / MANAGER' : 'Créer un projet'}
                             >
                               <Plus className="h-4 w-4" aria-hidden="true" />
                               Projet
@@ -396,33 +415,50 @@ export default function WorkspacesPage() {
 
                             <button
                               onClick={() => {
+                                if (!canRename) return;
                                 setEditingWorkspace(ws);
                                 setEditWorkspaceOpen(true);
                               }}
-                              disabled={loading || isBusy}
-                              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-extrabold text-gia-navy hover:bg-gia-bg2 disabled:opacity-60"
+                              disabled={loading || isBusy || !canRename}
+                              className={[
+                                'inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-extrabold text-gia-navy hover:bg-gia-bg2 disabled:opacity-60',
+                                !canRename ? 'cursor-not-allowed' : '',
+                              ].join(' ')}
                               type="button"
+                              title={!canRename ? 'Réservé au OWNER' : 'Renommer'}
                             >
                               <PencilLine className="h-4 w-4" aria-hidden="true" />
                               Rename
                             </button>
 
                             <button
-                              onClick={() => toggleWorkspaceActive(ws)}
-                              disabled={loading || isBusy}
-                              className="inline-flex items-center justify-center rounded-2xl bg-gia-orange px-3.5 py-2 text-xs font-extrabold text-white hover:opacity-90 disabled:opacity-60"
+                              onClick={() => {
+                                if (!canToggle) return;
+                                toggleWorkspaceActive(ws);
+                              }}
+                              disabled={loading || isBusy || !canToggle}
+                              className={[
+                                'inline-flex items-center justify-center rounded-2xl bg-gia-orange px-3.5 py-2 text-xs font-extrabold text-white hover:opacity-90 disabled:opacity-60',
+                                !canToggle ? 'cursor-not-allowed' : '',
+                              ].join(' ')}
                               type="button"
-                              title="Activer/Désactiver"
+                              title={!canToggle ? 'Réservé au OWNER' : 'Activer/Désactiver'}
                             >
                               <Power className="h-4 w-4" aria-hidden="true" />
                             </button>
 
                             <button
-                              onClick={() => deleteWorkspace(ws)}
-                              disabled={loading || isBusy}
-                              className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-3.5 py-2 text-xs font-extrabold text-white hover:opacity-90 disabled:opacity-60"
+                              onClick={() => {
+                                if (!canDel) return;
+                                deleteWorkspace(ws);
+                              }}
+                              disabled={loading || isBusy || !canDel}
+                              className={[
+                                'inline-flex items-center justify-center rounded-2xl bg-red-600 px-3.5 py-2 text-xs font-extrabold text-white hover:opacity-90 disabled:opacity-60',
+                                !canDel ? 'cursor-not-allowed' : '',
+                              ].join(' ')}
                               type="button"
-                              title="Supprimer"
+                              title={!canDel ? 'Réservé au OWNER' : 'Supprimer'}
                             >
                               <Trash2 className="h-4 w-4" aria-hidden="true" />
                             </button>

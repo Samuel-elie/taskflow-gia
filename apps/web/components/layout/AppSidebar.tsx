@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { LayoutGrid, Users, Settings, Home, Bell } from 'lucide-react';
+import { apiFetch } from '@/lib/fetcher';
 
 function NavItem({
   href,
@@ -30,7 +32,50 @@ function NavItem({
   );
 }
 
+type Me = {
+  user_id: string;
+  email?: string;
+  name?: string;
+  global_role?: 'ADMIN' | 'USER';
+};
+
 export default function AppSidebar() {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const [me, setMe] = useState<Me | null>(null);
+  const [meLoaded, setMeLoaded] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const data = await apiFetch<Me>('/auth/me');
+        if (!mounted) return;
+        setMe(data);
+      } catch {
+        // pas bloquant: si non connecté, AppShell/requireAuth gère ailleurs
+      } finally {
+        if (mounted) setMeLoaded(true);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const isAdmin = useMemo(() => (me?.global_role ?? 'USER') === 'ADMIN', [me?.global_role]);
+
+  //  Si un USER tente d'aller sur /admin/* via URL, on le sort (UX + sécurité côté UI)
+  useEffect(() => {
+    if (!meLoaded) return;
+    if (!isAdmin && pathname.startsWith('/admin')) {
+      router.replace('/workspaces'); // ou '/dashboard'
+    }
+  }, [meLoaded, isAdmin, pathname, router]);
+
   return (
     <div className="h-full p-4 flex flex-col">
       <div className="mb-6 rounded-3xl border border-slate-200/70 bg-white p-4 shadow-soft">
@@ -41,13 +86,27 @@ export default function AppSidebar() {
             <div className="text-xs text-slate-500">GIA-like workspace system</div>
           </div>
         </div>
+
+        {/* petit badge role (optionnel) */}
+        <div className="mt-3 text-[11px] text-slate-500">
+          {meLoaded ? (
+            <>
+              Connecté : <span className="font-extrabold text-gia-navy">{me?.name ?? me?.email ?? '—'}</span> ·{' '}
+              <span className="font-extrabold text-gia-navy">{me?.global_role ?? 'USER'}</span>
+            </>
+          ) : (
+            'Chargement…'
+          )}
+        </div>
       </div>
 
       <div className="space-y-2">
         <NavItem href="/dashboard" label="Dashboard" icon={Home} />
         <NavItem href="/workspaces" label="Workspaces" icon={LayoutGrid} />
         <NavItem href="/notifications" label="Notifications" icon={Bell} />
-        <NavItem href="/admin/users" label="Users (Admin)" icon={Users} />
+
+        {/*  Afficher le menu Admin uniquement si ADMIN */}
+        {isAdmin ? <NavItem href="/admin/users" label="Users (Admin)" icon={Users} /> : null}
       </div>
 
       <div className="mt-6 border-t border-slate-200/70 pt-4 space-y-2">
@@ -55,9 +114,7 @@ export default function AppSidebar() {
       </div>
 
       <div className="mt-auto pt-6 text-xs text-slate-500">
-        <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200/60">
-          v0.1 · TaskFlow
-        </div>
+        <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200/60">v0.1 · TaskFlow</div>
       </div>
     </div>
   );

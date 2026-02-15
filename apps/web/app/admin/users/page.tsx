@@ -1,20 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/fetcher';
 import { requireAuth } from '@/lib/requireAuth';
 import ConfirmModal from '@/components/ui/ConfirmModal';
-import {
-  Plus,
-  PencilLine,
-  Trash2,
-  Shield,
-  User,
-  Search,
-  Filter,
-  X,
-  Check,
-} from 'lucide-react';
+import { Plus, PencilLine, Trash2, Shield, User, Search, Filter, X, Check } from 'lucide-react';
 
 /* ------------------ User modal ------------------ */
 function UserModal({
@@ -47,10 +38,7 @@ function UserModal({
 
   if (!open) return null;
 
-  const canSave =
-    email.trim().length > 3 &&
-    email.includes('@') &&
-    (mode === 'edit' ? true : password.trim().length >= 6);
+  const canSave = email.trim().length > 3 && email.includes('@') && (mode === 'edit' ? true : password.trim().length >= 6);
 
   return (
     <div className="fixed inset-0 z-[9999] grid place-items-center p-6">
@@ -59,13 +47,9 @@ function UserModal({
         {/* Top bar */}
         <div className="flex items-start justify-between gap-3 px-6 py-5 border-b border-slate-200/60 bg-white/70">
           <div>
-            <h3 className="text-lg font-extrabold text-gia-navy">
-              {mode === 'create' ? 'Créer un utilisateur' : 'Modifier utilisateur'}
-            </h3>
+            <h3 className="text-lg font-extrabold text-gia-navy">{mode === 'create' ? 'Créer un utilisateur' : 'Modifier utilisateur'}</h3>
             <p className="mt-1 text-sm text-slate-600">
-              {mode === 'create'
-                ? 'Crée un compte (mot de passe requis).'
-                : 'Modifie email/nom/role. Mot de passe optionnel.'}
+              {mode === 'create' ? 'Crée un compte (mot de passe requis).' : 'Modifie email/nom/role. Mot de passe optionnel.'}
             </p>
           </div>
           <button
@@ -186,6 +170,12 @@ function RolePill({ role }: { role: 'ADMIN' | 'USER' }) {
 }
 
 export default function AdminUsersPage() {
+  const router = useRouter();
+
+  //  Gate admin (pour éviter d'afficher l'UI + éviter le 403 visible)
+  const [gateLoading, setGateLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -232,9 +222,32 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     requireAuth();
-    load().catch((e: any) => setError(e?.message ?? 'Erreur chargement users'));
+
+    (async () => {
+      try {
+        //  1) vérifier rôle avant de taper /admin/users
+        const me = await apiFetch<{ global_role?: 'ADMIN' | 'USER' }>('/auth/me');
+        const ok = me?.global_role === 'ADMIN';
+
+        if (!ok) {
+          setIsAdmin(false);
+          router.replace('/workspaces'); // ou '/dashboard'
+          return;
+        }
+
+        setIsAdmin(true);
+        await load();
+      } catch (e) {
+        router.replace('/login');
+      } finally {
+        setGateLoading(false);
+      }
+    })();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  //  Hooks TOUJOURS appelés (pas de return avant)
   const stats = useMemo(() => {
     const total = users.length;
     const admins = users.filter((u) => u.global_role === 'ADMIN').length;
@@ -245,13 +258,8 @@ export default function AdminUsersPage() {
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     return users.filter((u) => {
-      const matchText =
-        !s ||
-        (u.email ?? '').toLowerCase().includes(s) ||
-        (u.name ?? '').toLowerCase().includes(s);
-
+      const matchText = !s || (u.email ?? '').toLowerCase().includes(s) || (u.name ?? '').toLowerCase().includes(s);
       const matchRole = roleFilter === 'ALL' ? true : u.global_role === roleFilter;
-
       return matchText && matchRole;
     });
   }, [users, q, roleFilter]);
@@ -307,6 +315,20 @@ export default function AdminUsersPage() {
     });
   }
 
+  //  Rendu conditionnel APRÈS hooks
+  if (gateLoading) {
+    return (
+      <div className="rounded-3xl border border-slate-200/60 bg-white shadow-soft p-6">
+        <div className="text-sm text-slate-600">Chargement…</div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    // déjà redirect
+    return null;
+  }
+
   return (
     <>
       <ConfirmModal
@@ -343,9 +365,7 @@ export default function AdminUsersPage() {
         }}
       />
 
-      {/* IMPORTANT: pas de Header ici, AppShell le gère */}
       <div className="space-y-6">
-        {/* Hero / Title */}
         <div className="rounded-3xl border border-slate-200/60 bg-white shadow-soft overflow-hidden">
           <div className="p-6 sm:p-7 bg-gradient-to-r from-white via-white to-gia-bg2">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
@@ -355,9 +375,7 @@ export default function AdminUsersPage() {
                   Admin
                 </div>
                 <h1 className="mt-3 text-3xl font-extrabold text-gia-navy">Users</h1>
-                <p className="mt-1 text-sm text-slate-600">
-                  Créer, modifier et supprimer des utilisateurs (global role).
-                </p>
+                <p className="mt-1 text-sm text-slate-600">Créer, modifier et supprimer des utilisateurs (global role).</p>
               </div>
 
               <button
@@ -374,7 +392,6 @@ export default function AdminUsersPage() {
               </button>
             </div>
 
-            {/* Stats row */}
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-slate-200/60 bg-white p-4">
                 <div className="text-xs font-semibold text-slate-500">Total users</div>
@@ -393,15 +410,11 @@ export default function AdminUsersPage() {
         </div>
 
         {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         ) : null}
 
-        {/* Toolbar */}
         <section className="rounded-3xl border border-slate-200/60 bg-white shadow-soft p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {/* Search */}
             <div className="relative w-full sm:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
@@ -422,7 +435,6 @@ export default function AdminUsersPage() {
               ) : null}
             </div>
 
-            {/* Filters */}
             <div className="flex items-center gap-2">
               <div className="rounded-2xl border border-slate-200 bg-white p-1">
                 {(['ALL', 'ADMIN', 'USER'] as const).map((k) => {
@@ -443,13 +455,10 @@ export default function AdminUsersPage() {
                 })}
               </div>
 
-              <span className="rounded-full bg-gia-orange/10 px-3 py-1 text-xs font-extrabold text-gia-navy">
-                {filtered.length}
-              </span>
+              <span className="rounded-full bg-gia-orange/10 px-3 py-1 text-xs font-extrabold text-gia-navy">{filtered.length}</span>
             </div>
           </div>
 
-          {/* Table */}
           <div className="mt-5 overflow-auto rounded-3xl border border-slate-200/60">
             <table className="w-full text-sm">
               <thead className="bg-white sticky top-0">
@@ -469,9 +478,7 @@ export default function AdminUsersPage() {
                           <User className="h-6 w-6 text-gia-navy" />
                         </div>
                         <div className="font-extrabold text-gia-navy">Aucun résultat</div>
-                        <div className="text-sm text-slate-600">
-                          Essaie une autre recherche ou change le filtre.
-                        </div>
+                        <div className="text-sm text-slate-600">Essaie une autre recherche ou change le filtre.</div>
                       </div>
                     </td>
                   </tr>

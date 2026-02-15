@@ -30,7 +30,6 @@ type WorkspaceRole = 'OWNER' | 'MANAGER' | 'MEMBER';
 function canManageProjects(role: WorkspaceRole) {
   return role === 'OWNER' || role === 'MANAGER';
 }
-
 function canManageMembers(role: WorkspaceRole) {
   return role === 'OWNER' || role === 'MANAGER';
 }
@@ -123,7 +122,7 @@ export default function WorkspaceDetailPage() {
 
   async function loadWorkspaceFromMe() {
     const data = await apiFetch<any>('/workspaces/me');
-    const list: Workspace[] = Array.isArray(data) ? data : (data.items ?? data.workspaces ?? []);
+    const list: Workspace[] = Array.isArray(data) ? data : data.items ?? data.workspaces ?? [];
     const found = list.find((w) => w.workspace_id === workspaceId) ?? null;
     if (!found) throw new Error('Workspace introuvable (ou accès refusé).');
     setWorkspace(found);
@@ -131,7 +130,7 @@ export default function WorkspaceDetailPage() {
 
   async function loadProjects() {
     const data = await apiFetch<any>(`/workspaces/${workspaceId}/projects`);
-    const list: Project[] = Array.isArray(data) ? data : (data.items ?? data.projects ?? []);
+    const list: Project[] = Array.isArray(data) ? data : data.items ?? data.projects ?? [];
     setProjects(list);
   }
 
@@ -146,10 +145,19 @@ export default function WorkspaceDetailPage() {
   const filteredProjects = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return projects;
-    return projects.filter((p) => (p.name ?? '').toLowerCase().includes(s) || (p.description ?? '').toLowerCase().includes(s));
+    return projects.filter(
+      (p) =>
+        (p.name ?? '').toLowerCase().includes(s) ||
+        (p.description ?? '').toLowerCase().includes(s),
+    );
   }, [projects, q]);
 
   async function createProject() {
+    if (!canManageProjects(meRole)) {
+      showFeedback('error', 'Accès refusé', 'Vous n’avez pas les droits pour créer un projet.');
+      return;
+    }
+
     if (!projectName.trim()) {
       showFeedback('error', 'Erreur', 'Le nom du projet est requis.');
       return;
@@ -168,7 +176,7 @@ export default function WorkspaceDetailPage() {
       setProjectName('');
       setProjectDesc('');
       await loadProjects();
-      showFeedback('success', 'Projet créé', 'Le projet a été créé ');
+      showFeedback('success', 'Projet créé', 'Le projet a été créé.');
     } catch (e: any) {
       showFeedback('error', 'Erreur', e?.message ?? 'Erreur création projet');
     } finally {
@@ -177,6 +185,11 @@ export default function WorkspaceDetailPage() {
   }
 
   async function deleteProject(p: Project) {
+    if (!canManageProjects(meRole)) {
+      showFeedback('error', 'Accès refusé', 'Vous n’avez pas les droits pour supprimer un projet.');
+      return;
+    }
+
     openConfirm({
       title: 'Supprimer projet',
       message: `Voulez-vous confirmer la suppression :\n\n${p.name}\n\nCette action est irréversible.`,
@@ -284,9 +297,7 @@ export default function WorkspaceDetailPage() {
                   </span>
                 </div>
 
-                <p className="mt-2 text-sm text-slate-600">
-                  Gère les projets et les membres selon ton rôle.
-                </p>
+                <p className="mt-2 text-sm text-slate-600">Gère les projets et les membres selon ton rôle.</p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -320,9 +331,7 @@ export default function WorkspaceDetailPage() {
           </div>
         </div>
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-        ) : null}
+        {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
         {activeTab === 'projects' ? (
           <>
@@ -364,7 +373,7 @@ export default function WorkspaceDetailPage() {
               </section>
             ) : (
               <div className="rounded-3xl border border-slate-200/60 bg-white shadow-soft p-6 text-sm text-slate-600">
-                Vous n’avez pas les droits pour créer/modifier des projets.
+                Vous n’avez pas les droits pour créer/modifier des projets (OWNER / MANAGER).
               </div>
             )}
 
@@ -421,6 +430,8 @@ export default function WorkspaceDetailPage() {
                     ) : (
                       filteredProjects.map((p) => {
                         const busy = rowBusyId === p.project_id;
+                        const canManage = canManageProjects(meRole);
+
                         return (
                           <tr key={p.project_id} className="border-t border-slate-100 hover:bg-gia-bg2/70">
                             <td className="px-5 py-4">
@@ -443,7 +454,7 @@ export default function WorkspaceDetailPage() {
                                   Kanban <ArrowRight className="h-4 w-4" />
                                 </Link>
 
-                                {canManageProjects(meRole) ? (
+                                {canManage ? (
                                   <button
                                     disabled={busy}
                                     onClick={() => {
@@ -458,7 +469,7 @@ export default function WorkspaceDetailPage() {
                                   </button>
                                 ) : null}
 
-                                {canManageProjects(meRole) ? (
+                                {canManage ? (
                                   <button
                                     disabled={busy}
                                     onClick={() => deleteProject(p)}

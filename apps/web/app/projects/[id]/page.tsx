@@ -761,18 +761,25 @@ export default function ProjectKanbanPage() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:items-end">
-                  <button
-                    onClick={() => {
-                      setTaskModalMode('create');
-                      setEditingTask(null);
-                      setTaskModalOpen(true);
-                    }}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gia-navy px-5 py-3 text-sm font-extrabold text-white hover:bg-gia-navy2"
-                    type="button"
-                  >
-                    <Plus className="h-5 w-5" aria-hidden="true" />
-                    Nouvelle tâche
-                  </button>
+                  {isPrivileged(role) ? (
+                    <button
+                      onClick={() => {
+                        setTaskModalMode('create');
+                        setEditingTask(null);
+                        setTaskModalOpen(true);
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gia-navy px-5 py-3 text-sm font-extrabold text-white hover:bg-gia-navy2"
+                      type="button"
+                    >
+                      <Plus className="h-5 w-5" aria-hidden="true" />
+                      Nouvelle tâche
+                    </button>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-extrabold text-slate-600">
+                      Vous êtes <span className="text-gia-navy">{role}</span> : création de tâches réservée aux OWNER/MANAGER.
+                    </div>
+                  )}
+
 
                   <div className="text-xs text-slate-500">
                     Recherche + filtres par statut en bas 

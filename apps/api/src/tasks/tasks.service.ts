@@ -19,16 +19,16 @@ export class TasksService {
 
   /**
    * Crée une tâche dans un projet.
-   * Règles:
-   * - L'acteur doit être membre du workspace du projet.
-   * - Si assignee_id est fourni, l'assignee doit être membre du workspace.
+   * OPTION A (comme ton UI):
+   * - OWNER/MANAGER uniquement
+   * - assignee_id (si fourni) doit être membre du workspace
    */
   async createTask(params: {
     projectId: string;
     dto: {
       title: string;
       description?: string;
-      status?: TaskStatus;
+      status?: TaskStatus; // sera ignoré côté UI, mais on garde au cas où (on force TODO)
       priority?: TaskPriority;
       deadline?: string;
       assignee_id?: string;
@@ -38,7 +38,9 @@ export class TasksService {
     const { projectId, dto, actor } = params;
 
     const workspaceId = await this.workspaceAccess.getWorkspaceIdByProjectId(projectId);
-    await this.workspaceAccess.assertMember(workspaceId, actor.sub);
+
+    //création réservée OWNER/MANAGER
+    await this.workspaceAccess.assertCanManageTasks(workspaceId, actor.sub);
 
     if (dto.assignee_id) {
       await this.workspaceAccess.assertAssigneeIsMember(workspaceId, dto.assignee_id);
@@ -53,7 +55,10 @@ export class TasksService {
       data: {
         title: dto.title,
         description: dto.description,
-        status: dto.status ?? TaskStatus.TODO,
+
+        //  on force TODO (ton UI gère le cycle via /ack /close /desist)
+        status: TaskStatus.TODO,
+
         priority: dto.priority ?? TaskPriority.MEDIUM,
         deadline: deadlineDate,
 
@@ -78,7 +83,7 @@ export class TasksService {
       },
     });
 
-    //  Event: CREATED
+    // Event: CREATED
     await this.taskEvents.log({
       taskId: created.task_id,
       type: TaskEventType.CREATED,
@@ -86,7 +91,7 @@ export class TasksService {
       userId: actor.sub,
     });
 
-    //  Event: ASSIGNED (si assignee présent)
+    // Event: ASSIGNED (si assignee présent)
     if (created.assignee_id) {
       await this.taskEvents.log({
         taskId: created.task_id,
@@ -101,6 +106,8 @@ export class TasksService {
 
   /**
    * Liste les tâches d'un projet avec filtres + pagination.
+   * OPTION A:
+   * - Tout membre du workspace peut lister/voir les tâches
    */
   async listTasksByProject(params: {
     projectId: string;
@@ -116,6 +123,8 @@ export class TasksService {
     const { projectId, query, actorUserId } = params;
 
     const workspaceId = await this.workspaceAccess.getWorkspaceIdByProjectId(projectId);
+
+    //  listing = membre simple suffit (sinon MEMBER ne verra rien)
     await this.workspaceAccess.assertMember(workspaceId, actorUserId);
 
     const page = query.page ?? 1;
@@ -155,6 +164,12 @@ export class TasksService {
           assignee_id: true,
           creation_date: true,
           last_update_date: true,
+
+          // si tu as DESISTE fields dans le modèle et tu veux les voir côté UI:
+          assignee_id_old: true,
+          desist_reason: true,
+          desist_comment: true,
+          desist_date: true,
         },
       }),
     ]);
@@ -170,16 +185,20 @@ export class TasksService {
 
   /**
    * Met à jour une tâche (PATCH).
+   * OPTION A:
+   * - OWNER/MANAGER uniquement
+   * - seulement si la tâche est TODO
+   * - status ne se modifie pas ici (utiliser /ack /close /desist)
    */
   async updateTask(params: {
     taskId: string;
     dto: {
       title?: string;
       description?: string;
-      status?: TaskStatus;
+      status?: TaskStatus; // interdit ici
       priority?: TaskPriority;
       deadline?: string;
-      assignee_id?: string | null;
+      assignee_id?: string | null; // interdit ici (utiliser /assign)
     };
     actor: { sub: string; name: string; email: string };
   }) {
@@ -192,15 +211,31 @@ export class TasksService {
         project_id: true,
         assignee_id: true,
         title: true,
+        status: true,
       },
     });
     if (!existing) throw new NotFoundException('Tâche introuvable');
 
     const workspaceId = await this.workspaceAccess.getWorkspaceIdByProjectId(existing.project_id);
-    await this.workspaceAccess.assertMember(workspaceId, actor.sub);
 
-    if (dto.assignee_id && typeof dto.assignee_id === 'string') {
-      await this.workspaceAccess.assertAssigneeIsMember(workspaceId, dto.assignee_id);
+    //  OPTION A: edit réservé OWNER/MANAGER
+    await this.workspaceAccess.assertCanManageTasks(workspaceId, actor.sub);
+
+    //  OPTION A: edit seulement TODO
+    if (existing.status !== TaskStatus.TODO) {
+      throw new ForbiddenException('Modification interdite: seules les tâches TODO sont modifiables');
+    }
+
+    //  on interdit le changement de status ici
+    if (dto.status !== undefined) {
+      throw new BadRequestException(
+        'Le status ne se modifie pas ici (utiliser /tasks/:id/ack, /close, /desist)',
+      );
+    }
+
+    //  on interdit l’assignation via PATCH (on utilise /assign)
+    if (dto.assignee_id !== undefined) {
+      throw new BadRequestException("L'assignation ne se fait pas ici (utiliser /tasks/:id/assign)");
     }
 
     let deadlineDate: Date | null | undefined = undefined;
@@ -221,10 +256,8 @@ export class TasksService {
       data: {
         title: dto.title,
         description: dto.description,
-        status: dto.status,
         priority: dto.priority,
         deadline: deadlineDate,
-        assignee_id: dto.assignee_id === undefined ? undefined : dto.assignee_id,
 
         updator_id: actor.sub,
         updator_name: actor.name || actor.email,
@@ -241,7 +274,7 @@ export class TasksService {
       },
     });
 
-    //  Event: UPDATED
+    // Event: UPDATED
     await this.taskEvents.log({
       taskId,
       type: TaskEventType.UPDATED,
@@ -249,47 +282,36 @@ export class TasksService {
       userId: actor.sub,
     });
 
-    //  Event: ASSIGNED / REASSIGNED si l'assignee a changé
-    if (dto.assignee_id !== undefined && dto.assignee_id !== existing.assignee_id) {
-      const type =
-        existing.assignee_id && dto.assignee_id
-          ? TaskEventType.REASSIGNED
-          : dto.assignee_id
-            ? TaskEventType.ASSIGNED
-            : TaskEventType.UPDATED;
-
-      const msg =
-        type === TaskEventType.REASSIGNED
-          ? `Tâche réassignée`
-          : type === TaskEventType.ASSIGNED
-            ? `Tâche assignée`
-            : `Assignation retirée`;
-
-      await this.taskEvents.log({
-        taskId,
-        type,
-        message: msg,
-        userId: actor.sub,
-      });
-    }
-
     return updated;
   }
 
   /**
    * Soft delete d'une tâche.
+   * OPTION A:
+   * - OWNER/MANAGER uniquement
+   * - seulement si TODO
    */
-  async deleteTask(params: { taskId: string; actor: { sub: string; name: string; email: string } }) {
+  async deleteTask(params: {
+    taskId: string;
+    actor: { sub: string; name: string; email: string };
+  }) {
     const { taskId, actor } = params;
 
     const task = await this.prisma.task.findFirst({
       where: { task_id: taskId, deleted: 0, active: 1 },
-      select: { task_id: true, project_id: true, title: true },
+      select: { task_id: true, project_id: true, title: true, status: true },
     });
     if (!task) throw new NotFoundException('Tâche introuvable');
 
     const workspaceId = await this.workspaceAccess.getWorkspaceIdByProjectId(task.project_id);
-    await this.workspaceAccess.assertMember(workspaceId, actor.sub);
+
+    //  OPTION A: delete réservé OWNER/MANAGER
+    await this.workspaceAccess.assertCanManageTasks(workspaceId, actor.sub);
+
+    //  OPTION A: delete seulement TODO
+    if (task.status !== TaskStatus.TODO) {
+      throw new ForbiddenException('Suppression interdite: seules les tâches TODO sont supprimables');
+    }
 
     await this.prisma.task.update({
       where: { task_id: taskId },
@@ -302,7 +324,6 @@ export class TasksService {
       },
     });
 
-    // (Optionnel) tu pourrais log un event UPDATED ou un type DELETED si tu l’ajoutes
     await this.taskEvents.log({
       taskId,
       type: TaskEventType.UPDATED,
@@ -314,7 +335,10 @@ export class TasksService {
   }
 
   /**
-   * Assigne / réassigne / désassigne une tâche.
+   * Assigne / désassigne une tâche.
+   * OPTION A:
+   * - OWNER/MANAGER uniquement
+   * - seulement si TODO
    */
   async assignTask(params: {
     taskId: string;
@@ -325,12 +349,19 @@ export class TasksService {
 
     const task = await this.prisma.task.findFirst({
       where: { task_id: taskId, deleted: 0, active: 1 },
-      select: { task_id: true, title: true, project_id: true, assignee_id: true },
+      select: { task_id: true, title: true, project_id: true, assignee_id: true, status: true },
     });
     if (!task) throw new NotFoundException('Tâche introuvable');
 
     const workspaceId = await this.workspaceAccess.getWorkspaceIdByProjectId(task.project_id);
-    await this.workspaceAccess.assertMember(workspaceId, actor.sub);
+
+    //  OPTION A: assign réservé OWNER/MANAGER
+    await this.workspaceAccess.assertCanManageTasks(workspaceId, actor.sub);
+
+    //  OPTION A: assign seulement TODO
+    if (task.status !== TaskStatus.TODO) {
+      throw new ForbiddenException("Assignation interdite: la tâche doit être en TODO");
+    }
 
     if (assignee_id && typeof assignee_id === 'string') {
       await this.workspaceAccess.assertAssigneeIsMember(workspaceId, assignee_id);
@@ -356,7 +387,7 @@ export class TasksService {
       },
     });
 
-    // ✅ Event: ASSIGNED / REASSIGNED / UPDATED (désassign)
+    // Event: ASSIGNED / REASSIGNED / UPDATED (désassign)
     if (beforeAssignee !== nextAssignee) {
       const type: TaskEventType =
         beforeAssignee && nextAssignee
@@ -402,6 +433,7 @@ export class TasksService {
 
   /**
    * Liste mes tâches + retourne des counts UX-friendly.
+   * (assignee-only, donc OK pour MEMBER)
    */
   async listMyTasks(params: {
     actorUserId: string;
@@ -513,7 +545,7 @@ export class TasksService {
   }
 
   /**
-   * Récupère la tâche + vérifie accès workspace.
+   * Récupère la tâche + vérifie accès workspace (membre suffit).
    * Retourne task + workspaceId.
    */
   private async getTaskWithWorkspaceOrThrow(taskId: string, actorUserId: string) {
@@ -537,8 +569,7 @@ export class TasksService {
   }
 
   /**
-   * Accuser réception: TODO -> DOING
-   * - assignee uniquement
+   * Accuser réception: TODO -> DOING (assignee uniquement)
    */
   async acknowledgeTask(params: {
     taskId: string;
@@ -570,7 +601,6 @@ export class TasksService {
       },
     });
 
-    //  Event: ACKNOWLEDGED
     await this.taskEvents.log({
       taskId,
       type: TaskEventType.ACKNOWLEDGED,
@@ -582,10 +612,12 @@ export class TasksService {
   }
 
   /**
-   * Clôturer: DOING -> DONE
-   * - assignee uniquement
+   * Clôturer: DOING -> DONE (assignee uniquement)
    */
-  async closeTask(params: { taskId: string; actor: { sub: string; name: string; email: string } }) {
+  async closeTask(params: {
+    taskId: string;
+    actor: { sub: string; name: string; email: string };
+  }) {
     const { taskId, actor } = params;
 
     const { task } = await this.getTaskWithWorkspaceOrThrow(taskId, actor.sub);
@@ -612,7 +644,6 @@ export class TasksService {
       },
     });
 
-    //  Event: CLOSED
     await this.taskEvents.log({
       taskId,
       type: TaskEventType.CLOSED,
@@ -624,7 +655,7 @@ export class TasksService {
   }
 
   /**
-   * Désistement: TODO/DOING -> DESISTE
+   * Désistement: TODO/DOING -> DESISTE (assignee uniquement)
    */
   async desistTask(params: {
     taskId: string;
@@ -675,7 +706,6 @@ export class TasksService {
       },
     });
 
-    //  Event: DESISTED
     await this.taskEvents.log({
       taskId,
       type: TaskEventType.DESISTED,
@@ -683,7 +713,6 @@ export class TasksService {
       userId: actor.sub,
     });
 
-    // Notification owner projet (MVP)
     const proj = await this.prisma.project.findFirst({
       where: { project_id: task.project_id, deleted: 0, active: 1 },
       select: { owner_id: true },
@@ -708,8 +737,7 @@ export class TasksService {
   }
 
   /**
-   * Réassigner: DESISTE -> TODO
-   * - OWNER/MANAGER uniquement
+   * Réassigner: DESISTE -> TODO (OWNER/MANAGER uniquement)
    */
   async reassignTask(params: {
     taskId: string;
@@ -784,7 +812,6 @@ export class TasksService {
       },
     });
 
-    //  Event: REASSIGNED
     await this.taskEvents.log({
       taskId,
       type: TaskEventType.REASSIGNED,
