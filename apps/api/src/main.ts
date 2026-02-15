@@ -12,27 +12,33 @@ async function bootstrap() {
   //  Validation globale des DTO
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // supprime les champs inconnus
-      transform: true, // transforme les types (string -> number)
+      whitelist: true,
+      transform: true,
       forbidNonWhitelisted: false,
     }),
   );
 
-  //  CORS pour le frontend local
+  //  CORS (local + Vercel)
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    credentials: false, // pas de cookies pour l'instant
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://taskflow-gia-aeeg.vercel.app', // <-- ton domaine Vercel
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: false, //  OK car tu utilises Authorization Bearer, pas cookies
   });
 
   //  Servir les fichiers uploadés en statique: /uploads/...
   const uploadDir = join(process.cwd(), 'uploads');
   if (!existsSync(uploadDir)) mkdirSync(uploadDir);
-
   app.useStaticAssets(uploadDir, { prefix: '/uploads' });
 
-  const port = process.env.API_PORT ? Number(process.env.API_PORT) : 3001;
+  //  IMPORTANT: Render/Railway utilisent process.env.PORT
+  const port = process.env.PORT ? Number(process.env.PORT) : 3001;
   await app.listen(port);
 
-  console.log(`API running on http://localhost:${port}`);
+  console.log(`API running on port ${port}`);
 }
 bootstrap();
