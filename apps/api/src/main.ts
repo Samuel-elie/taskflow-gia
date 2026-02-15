@@ -24,7 +24,7 @@ async function bootstrap() {
       'http://localhost:3000',
       'http://localhost:3001',
       'https://taskflow-gia.vercel.app',
-      'https://taskflow-gia-aeeg.vercel.app', // <-- ton domaine Vercel
+      'https://taskflow-gia-aeeg.vercel.app',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

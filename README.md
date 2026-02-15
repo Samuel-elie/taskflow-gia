@@ -1362,6 +1362,143 @@ npm run dev
 Application disponible sur : 
 http://localhost:3000 
 
+Déploiement (Cloud) 
+
+1) Base de données : Neon (PostgreSQL) 
+
+La base PostgreSQL est hébergée sur Neon. 
+
+Une instance Postgres est créée via Neon 
+
+La connexion se fait via DATABASE_URL (avec sslmode=require) 
+
+Les migrations Prisma sont appliquées en production avec : 
+
+npx prisma migrate deploy 
+ 
+
+ 
+
+2) Backend (API NestJS) : Render 
+
+L’API est déployée sur Render et connectée à Neon. 
+
+2.1 Configuration Render 
+
+Service : Web Service 
+
+Source : GitHub repo taskflow-gia 
+
+Root directory (monorepo) : apps/api 
+
+Build command : 
+
+npm install && npx prisma generate && npx prisma migrate deploy && npm run build 
+ 
+
+Start command : 
+
+npm run start:prod 
+ 
+
+2.2 Variables d’environnement (Render) 
+
+Dans Render → Environment : 
+
+DATABASE_URL = URL Neon (avec ?sslmode=require) 
+
+JWT_ACCESS_SECRET 
+
+JWT_REFRESH_SECRET 
+
+JWT_ACCESS_EXPIRES_IN (ex: 15m) 
+
+JWT_REFRESH_EXPIRES_IN (ex: 7d) 
+
+2.3 Port en production 
+
+Render injecte automatiquement PORT. 
+Le backend écoute donc sur : 
+
+const port = process.env.PORT ? Number(process.env.PORT) : 3001; 
+await app.listen(port); 
+ 
+
+2.4 CORS (Vercel) 
+
+Le backend autorise les origines suivantes : 
+
+http://localhost:3000 (dev) 
+
+https://taskflow-gia-aeeg.vercel.app (preview) 
+
+https://taskflow-gia.vercel.app (prod) 
+
+ 
+
+3) Frontend (Next.js) : Vercel 
+
+Le frontend est déployé sur Vercel (déploiement automatique depuis GitHub). 
+
+3.1 Configuration Vercel 
+
+Projet : Import du repo GitHub taskflow-gia 
+
+Root directory : apps/web 
+
+3.2 Variables d’environnement (Vercel) 
+
+Dans Vercel → Settings → Environment Variables : 
+
+NEXT_PUBLIC_API_URL = URL de l’API Render (sans slash final) 
+
+Exemple : 
+
+NEXT_PUBLIC_API_URL=https://taskflow-gia.onrender.com 
+ 
+
+ Cette variable doit être renseignée pour : 
+
+Preview 
+
+Production 
+
+ 
+
+4) Liens de production 
+
+Frontend (Vercel preview) : 
+https://taskflow-gia-aeeg.vercel.app 
+
+Frontend (Vercel prod) : 
+https://taskflow-gia.vercel.app 
+
+Backend (Render) : 
+https://taskflow-gia.onrender.com 
+
+ 
+
+5) Livraison (ce que “le lien” veut dire) 
+
+Le “lien” demandé dans l’énoncé correspond généralement à : 
+
+le lien de l’application web (Vercel) 
+et idéalement aussi : 
+
+le lien de l’API (Render) 
+
+le repo GitHub (code) 
+
+Donc dans ton mail de rendu tu mets : 
+
+Repo GitHub 
+
+Lien Vercel (prod ou preview) 
+
+Lien Render 
+
+ 
+
  				Utilisation 
 
 1) Créer un premier utilisateur (bootstrap) 
