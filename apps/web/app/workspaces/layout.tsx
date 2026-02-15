@@ -15,5 +15,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .catch(() => setUnreadCount(0));
   }, []);
 
-  return <AppShell unreadCount={unreadCount}>{children}</AppShell>;
+    return <AppShell>{children}</AppShell>;
+
 }
