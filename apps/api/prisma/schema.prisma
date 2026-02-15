@@ -1,0 +1,423 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskStatus {
+  TODO
+  DOING
+  DONE
+  DESISTE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TaskEventType {
+  CREATED
+  UPDATED
+  ASSIGNED
+  ACKNOWLEDGED
+  CLOSED
+  DESISTED
+  REASSIGNED
+  COMMENTED
+}
+
+/// Rôle global (optionnel) pour la plateforme.
+/// - ADMIN : super-admin SaaS
+/// - USER  : normal
+enum UserRole {
+  ADMIN
+  USER
+}
+
+/// Rôle au niveau workspace.
+/// - OWNER   : tout gérer (membres, projets, tâches)
+/// - MANAGER : gérer projets/tâches (assign/reassign, edit/delete TODO)
+/// - MEMBER  : exécuter tâches (accuser réception, clôturer, se désister)
+enum WorkspaceRole {
+  OWNER
+  MANAGER
+  MEMBER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+model TaskEvent {
+  task_event_id String @id @default(cuid())
+
+  task_id String
+  task    Task @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+
+  type    TaskEventType
+  message String
+
+  user_id String
+  user    User @relation(fields: [user_id], references: [user_id], onDelete: Restrict)
+
+  creation_date DateTime @default(now())
+
+  @@index([task_id])
+  @@index([type])
+}
+
+model Attachment {
+  attachment_id String @id @default(cuid())
+
+  task_id String
+  task    Task @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+
+  uploader_id String
+  uploader    User @relation("AttachmentUploader", fields: [uploader_id], references: [user_id], onDelete: Restrict)
+
+  file_name    String
+  content_type String?
+  file_size    Int?
+  url          String
+  storage_key  String?
+
+  creation_date DateTime @default(now())
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  @@index([task_id])
+  @@index([uploader_id])
+}
+
+model WorkspaceInvite {
+  workspace_invite_id String @id @default(cuid())
+
+  workspace_id String
+  workspace    Workspace @relation(fields: [workspace_id], references: [workspace_id], onDelete: Restrict)
+
+  email String
+  role  WorkspaceRole @default(MEMBER)
+
+  // token stocké hashé (sécurité)
+  token_hash String
+  expires_at  DateTime
+  status      InviteStatus @default(PENDING)
+
+  accepted_by_user_id String?
+  accepted_by_user    User? @relation("AcceptedInvites", fields: [accepted_by_user_id], references: [user_id], onDelete: SetNull)
+
+  creator_id       String?
+  creator_name     String?
+  creation_date    DateTime @default(now())
+  updator_id       String?
+  updator_name     String?
+  last_update_date DateTime @updatedAt
+  deletor_id       String?
+  deletor_name     String?
+  deleted_date     DateTime?
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  @@index([workspace_id])
+  @@index([email])
+  @@index([status])
+  @@index([expires_at])
+}
+
+model User {
+  user_id String @id @default(cuid())
+
+  email    String @unique
+  name     String?
+  password String
+
+  global_role UserRole @default(USER)
+  reset_password Int @default(0) @db.SmallInt
+
+  creator_id       String?
+  creator_name     String?
+  creation_date    DateTime @default(now())
+  updator_id       String?
+  updator_name     String?
+  last_update_date DateTime @updatedAt
+  deletor_id       String?
+  deletor_name     String?
+  deleted_date     DateTime?
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  projects_owned Project[] @relation("ProjectOwner")
+
+  tasks_assigned     Task[] @relation("TaskAssignee")
+  tasks_assigned_old Task[] @relation("TaskAssigneeOld")
+  tasks_desisted     Task[] @relation("TaskDesistor")
+
+  events   TaskEvent[]
+  comments Comment[]
+
+  attachments_uploaded Attachment[] @relation("AttachmentUploader")
+
+  mentions_received CommentMention[] @relation("MentionsReceived")
+
+  //  invitations acceptées par ce user
+  accepted_invites WorkspaceInvite[] @relation("AcceptedInvites")
+
+  notifications  Notification[]
+  refresh_tokens RefreshToken[]
+  memberships    WorkspaceMember[]
+
+  @@index([global_role])
+}
+
+model Workspace {
+  workspace_id String @id @default(cuid())
+
+  name String
+
+  creator_id       String?
+  creator_name     String?
+  creation_date    DateTime @default(now())
+  updator_id       String?
+  updator_name     String?
+  last_update_date DateTime @updatedAt
+  deletor_id       String?
+  deletor_name     String?
+  deleted_date     DateTime?
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  members  WorkspaceMember[]
+  projects Project[]
+
+  //  invitations liées au workspace
+  invites WorkspaceInvite[]
+
+  @@index([name])
+}
+
+model WorkspaceMember {
+  workspace_member_id String @id @default(cuid())
+
+  workspace_id String
+  user_id      String
+
+  role WorkspaceRole @default(MEMBER)
+
+  workspace Workspace @relation(fields: [workspace_id], references: [workspace_id], onDelete: Restrict)
+  user      User      @relation(fields: [user_id], references: [user_id], onDelete: Restrict)
+
+  creator_id       String?
+  creator_name     String?
+  creation_date    DateTime @default(now())
+  updator_id       String?
+  updator_name     String?
+  last_update_date DateTime @updatedAt
+  deletor_id       String?
+  deletor_name     String?
+  deleted_date     DateTime?
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  @@unique([workspace_id, user_id])
+  @@index([user_id])
+  @@index([workspace_id])
+  @@index([role])
+}
+
+model Project {
+  project_id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  workspace_id String
+  workspace    Workspace @relation(fields: [workspace_id], references: [workspace_id], onDelete: Restrict)
+
+  owner_id String
+  owner    User @relation("ProjectOwner", fields: [owner_id], references: [user_id], onDelete: Restrict)
+
+  creator_id       String?
+  creator_name     String?
+  creation_date    DateTime @default(now())
+  updator_id       String?
+  updator_name     String?
+  last_update_date DateTime @updatedAt
+  deletor_id       String?
+  deletor_name     String?
+  deleted_date     DateTime?
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  tasks Task[]
+
+  @@index([owner_id])
+  @@index([workspace_id])
+}
+
+model Task {
+  task_id String @id @default(cuid())
+
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  deadline    DateTime?
+
+  project_id String
+  project    Project @relation(fields: [project_id], references: [project_id], onDelete: Restrict)
+
+  assignee_id String?
+  assignee    User? @relation("TaskAssignee", fields: [assignee_id], references: [user_id], onDelete: SetNull)
+
+  assignee_id_old String?
+  assignee_old    User? @relation("TaskAssigneeOld", fields: [assignee_id_old], references: [user_id], onDelete: SetNull)
+
+  desistor_id String?
+  desistor    User? @relation("TaskDesistor", fields: [desistor_id], references: [user_id], onDelete: SetNull)
+
+  desist_reason  String?
+  desist_comment String?
+  desist_date    DateTime?
+
+  comments Comment[]
+  events   TaskEvent[]
+  attachments Attachment[]
+
+  creator_id       String?
+  creator_name     String?
+  creation_date    DateTime @default(now())
+  updator_id       String?
+  updator_name     String?
+  last_update_date DateTime @updatedAt
+  deletor_id       String?
+  deletor_name     String?
+  deleted_date     DateTime?
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  @@index([project_id])
+  @@index([assignee_id])
+  @@index([assignee_id_old])
+  @@index([desistor_id])
+  @@index([status])
+  @@index([deadline])
+}
+
+model Comment {
+  comment_id String @id @default(cuid())
+
+  content String
+
+  task_id String
+  task    Task @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+
+  user_id String
+  user    User @relation(fields: [user_id], references: [user_id], onDelete: Restrict)
+
+  mentions CommentMention[]
+
+  creator_id       String?
+  creator_name     String?
+  creation_date    DateTime @default(now())
+  updator_id       String?
+  updator_name     String?
+  last_update_date DateTime @updatedAt
+  deletor_id       String?
+  deletor_name     String?
+  deleted_date     DateTime?
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  @@index([task_id])
+  @@index([user_id])
+}
+
+model CommentMention {
+  comment_mention_id String @id @default(cuid())
+
+  comment_id String
+  comment    Comment @relation(fields: [comment_id], references: [comment_id], onDelete: Cascade)
+
+  mentioned_user_id String
+  mentioned_user    User @relation("MentionsReceived", fields: [mentioned_user_id], references: [user_id], onDelete: Restrict)
+
+  creation_date DateTime @default(now())
+
+  @@unique([comment_id, mentioned_user_id])
+  @@index([mentioned_user_id])
+}
+
+model Notification {
+  notification_id String @id @default(cuid())
+
+  type    String
+  message String
+  read    Int @default(0) @db.SmallInt
+
+  //  pour lier une notif à une ressource (workspace_invite_id, task_id, etc.)
+  reference_id String?
+
+  user_id String
+  user    User @relation(fields: [user_id], references: [user_id], onDelete: Restrict)
+
+  creator_id       String?
+  creator_name     String?
+  creation_date    DateTime @default(now())
+  updator_id       String?
+  updator_name     String?
+  last_update_date DateTime @updatedAt
+  deletor_id       String?
+  deletor_name     String?
+  deleted_date     DateTime?
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  @@index([user_id])
+  @@index([read])
+  @@index([reference_id])
+}
+
+
+model RefreshToken {
+  refresh_token_id String @id @default(cuid())
+
+  token_hash String
+  revoked    Int @default(0) @db.SmallInt
+  expires_at DateTime
+
+  user_id String
+  user    User @relation(fields: [user_id], references: [user_id], onDelete: Restrict)
+
+  creator_id       String?
+  creator_name     String?
+  creation_date    DateTime @default(now())
+  updator_id       String?
+  updator_name     String?
+  last_update_date DateTime @updatedAt
+  deletor_id       String?
+  deletor_name     String?
+  deleted_date     DateTime?
+
+  active  Int @default(1) @db.SmallInt
+  deleted Int @default(0) @db.SmallInt
+
+  @@index([user_id])
+  @@index([expires_at])
+}
