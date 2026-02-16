@@ -14,7 +14,9 @@ import { JobsModule } from './jobs/jobs.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 
-import { AdminUsersModule } from './admin-users/admin-users.module'; // ✅ AJOUT
+import { AdminUsersModule } from './admin-users/admin-users.module';
+import { UsersModule } from './users/users.module'; 
+
 
 @Module({
   imports: [
@@ -28,6 +30,7 @@ import { AdminUsersModule } from './admin-users/admin-users.module'; // ✅ AJOU
     AttachmentsModule,
 
     AdminUsersModule,
+    UsersModule,
 
     ScheduleModule.forRoot(),
     JobsModule,

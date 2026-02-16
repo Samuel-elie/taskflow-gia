@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutGrid, Users, Settings, Home, Bell } from 'lucide-react';
+import { LayoutGrid, Users, Settings, Home, Bell, ListTodo } from 'lucide-react';
 import { apiFetch } from '@/lib/fetcher';
 
 function NavItem({
@@ -103,7 +103,9 @@ export default function AppSidebar() {
       <div className="space-y-2">
         <NavItem href="/dashboard" label="Dashboard" icon={Home} />
         <NavItem href="/workspaces" label="Workspaces" icon={LayoutGrid} />
+        <NavItem href="/tasks/me" label="Mes tâches" icon={ListTodo} />
         <NavItem href="/notifications" label="Notifications" icon={Bell} />
+        
 
         {/*  Afficher le menu Admin uniquement si ADMIN */}
         {isAdmin ? <NavItem href="/admin/users" label="Users (Admin)" icon={Users} /> : null}
