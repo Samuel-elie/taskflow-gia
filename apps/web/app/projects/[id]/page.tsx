@@ -342,9 +342,25 @@ export default function ProjectKanbanPage() {
     setTasks(items);
   }
 
-  async function patchTask(taskId: string, payload: any) {
-    return apiFetch<Task>(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(payload) });
-  }
+  //async function patchTask(taskId: string, payload: any) {
+  //  return apiFetch<Task>(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  //}
+
+async function ackTask(taskId: string) {
+  return apiFetch<Task>(`/tasks/${taskId}/ack`, { method: 'PATCH' });
+}
+
+async function closeTaskApi(taskId: string) {
+  return apiFetch<Task>(`/tasks/${taskId}/close`, { method: 'PATCH' });
+}
+
+async function desistTaskApi(taskId: string, payload: { reason: string; comment: string }) {
+  return apiFetch<Task>(`/tasks/${taskId}/desist`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 
   async function acceptTask(task: Task) {
     openConfirm({
@@ -360,14 +376,23 @@ export default function ProjectKanbanPage() {
         const before = task;
         setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? { ...t, status: 'DOING' } : t)));
 
+        //try {
+        //  await patchTask(task.task_id, { status: 'DOING' });
+        //  showToast('success', 'Succès', 'La tâche est maintenant en cours.');
+        //  setActiveTab('DOING');
+        //} catch (e: any) {
+        //  setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? before : t)));
+        //  showToast('error', 'Erreur', e?.message ?? "Impossible d'accuser réception.");
+       // }
         try {
-          await patchTask(task.task_id, { status: 'DOING' });
+          await ackTask(task.task_id);
           showToast('success', 'Succès', 'La tâche est maintenant en cours.');
           setActiveTab('DOING');
         } catch (e: any) {
           setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? before : t)));
           showToast('error', 'Erreur', e?.message ?? "Impossible d'accuser réception.");
         }
+
       },
     });
   }
@@ -386,14 +411,23 @@ export default function ProjectKanbanPage() {
         const before = task;
         setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? { ...t, status: 'DONE' } : t)));
 
+        //try {
+        //  await patchTask(task.task_id, { status: 'DONE' });
+        //  showToast('success', 'Succès', 'La tâche est clôturée.');
+        //  setActiveTab('DONE');
+        //} catch (e: any) {
+        //  setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? before : t)));
+        //  showToast('error', 'Erreur', e?.message ?? 'Impossible de clôturer.');
+        //}
         try {
-          await patchTask(task.task_id, { status: 'DONE' });
+          await closeTaskApi(task.task_id);
           showToast('success', 'Succès', 'La tâche est clôturée.');
           setActiveTab('DONE');
         } catch (e: any) {
           setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? before : t)));
           showToast('error', 'Erreur', e?.message ?? 'Impossible de clôturer.');
         }
+
       },
     });
   }
@@ -434,14 +468,28 @@ export default function ProjectKanbanPage() {
       ),
     );
 
+  //  try {
+  //    await patchTask(task.task_id, {
+  //      status: 'DESISTE',
+  //      assignee_id_old: task.assignee_id ?? null,
+  //      assignee_id: null,
+  //      desist_reason: payload.reason,
+  //      desist_comment: payload.comment,
+  //    });
+
+  //    showToast('success', 'Succès', 'Désistement enregistré. La tâche doit être réassignée.');
+  //    setDesistOpen(false);
+   //   setDesistTask(null);
+   //   setActiveTab('DESISTE' as any);
+   // } catch (e: any) {
+  //    setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? before : t)));
+  //    showToast('error', 'Erreur', e?.message ?? 'Impossible de se désister.');
+ //   } finally {
+ //     setDesistLoading(false);
+  //  }
+
     try {
-      await patchTask(task.task_id, {
-        status: 'DESISTE',
-        assignee_id_old: task.assignee_id ?? null,
-        assignee_id: null,
-        desist_reason: payload.reason,
-        desist_comment: payload.comment,
-      });
+      await desistTaskApi(task.task_id, payload);
 
       showToast('success', 'Succès', 'Désistement enregistré. La tâche doit être réassignée.');
       setDesistOpen(false);
@@ -453,6 +501,7 @@ export default function ProjectKanbanPage() {
     } finally {
       setDesistLoading(false);
     }
+
   }
 
   function openReassign(task: Task) {
