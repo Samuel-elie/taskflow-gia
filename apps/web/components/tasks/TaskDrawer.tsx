@@ -53,6 +53,51 @@ function Card({ title, children }: { title: string; children: any }) {
   );
 }
 
+function renderCommentWithMentions(content: string) {
+  // supporte:
+  // - "@[Nom](id)"
+  // - "@[Nom] (id)"
+  const regex = /@\[(.+?)\]\s*\(([^)]+)\)/g;
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = regex.exec(content)) !== null) {
+    const [full, name, id] = match;
+    const start = match.index;
+    const end = start + full.length;
+
+    // texte avant la mention
+    if (start > lastIndex) {
+      parts.push(<span key={`t-${key++}`}>{content.slice(lastIndex, start)}</span>);
+    }
+
+    // la mention stylée (ID caché)
+    parts.push(
+      <span
+        key={`m-${key++}`}
+        className="inline-flex items-center rounded-lg bg-gia-bg2 px-2 py-0.5 text-sm font-extrabold text-gia-navy"
+        data-mention-id={id} // utile si un jour tu veux click -> profil
+        title={name} // tooltip
+      >
+        @{name}
+      </span>
+    );
+
+    lastIndex = end;
+  }
+
+  // texte après la dernière mention
+  if (lastIndex < content.length) {
+    parts.push(<span key={`t-${key++}`}>{content.slice(lastIndex)}</span>);
+  }
+
+  return parts;
+}
+
+
 export default function TaskDrawer({
   open,
   taskId,
@@ -304,7 +349,7 @@ export default function TaskDrawer({
                           <div className="text-xs text-slate-500">{fmtDate(c.creation_date)}</div>
                         </div>
                         <div className="mt-1 text-sm text-slate-700 whitespace-pre-line break-words">
-                          {c.content}
+                          {renderCommentWithMentions(c.content)}
                         </div>
                       </div>
                     </div>
