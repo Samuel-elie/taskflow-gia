@@ -224,6 +224,15 @@ function PriorityPill({ p }: { p: any }) {
   return <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${cls}`}>{p}</span>;
 }
 
+function OverduePill() {
+  return (
+    <span className="inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-extrabold text-red-700">
+      EN RETARD
+    </span>
+  );
+}
+
+
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-3xl border border-slate-200/60 bg-white p-4 shadow-soft">
@@ -1032,11 +1041,23 @@ function TasksTable({
                   members.find((m) => m.user.user_id === t.assignee_id)?.user.name ??
                   members.find((m) => m.user.user_id === t.assignee_id)?.user.email ??
                   '—';
+                const isOverdue =
+                (t as any).is_overdue === true ||
+                (!!t.deadline &&
+                  new Date(t.deadline).getTime() < Date.now() &&
+                  t.status !== 'DONE' &&
+                  (t as any).status !== 'DESISTE');
+  
 
                 return (
                   <tr key={t.task_id} className="border-t border-slate-100 hover:bg-gia-bg2/70">
                     <td className="px-5 py-4">
                       <div className="font-extrabold text-gia-text">{t.title}</div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {isOverdue ? <OverduePill /> : null}
+                      </div>
+
 
                       {t.description ? (
                         <div className="mt-1 line-clamp-2 text-xs text-slate-500">{t.description}</div>
@@ -1054,9 +1075,21 @@ function TasksTable({
                       <PriorityPill p={t.priority} />
                     </td>
 
-                    <td className="px-5 py-4 text-slate-700">
-                      {t.deadline ? new Date(t.deadline).toLocaleString() : '—'}
+                   <td className="px-5 py-4">
+                      {t.deadline ? (
+                        <div className={isOverdue ? 'font-extrabold text-red-700' : 'text-slate-700'}>
+                          {new Date(t.deadline).toLocaleString()}
+                          {isOverdue && (t as any).overdue_by_minutes ? (
+                            <div className="mt-1 text-[11px] font-semibold text-red-600">
+                              En retard de {Math.floor((t as any).overdue_by_minutes / 60)}h
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        '—'
+                      )}
                     </td>
+
 
                     <td className="px-5 py-4">
                       {canAssign ? (

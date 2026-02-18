@@ -109,79 +109,98 @@ export class TasksService {
    * OPTION A:
    * - Tout membre du workspace peut lister/voir les tâches
    */
-  async listTasksByProject(params: {
-    projectId: string;
-    query: {
-      status?: TaskStatus;
-      assigneeId?: string;
-      overdue?: 0 | 1;
-      page?: number;
-      pageSize?: number;
-    };
-    actorUserId: string;
-  }) {
-    const { projectId, query, actorUserId } = params;
+async listTasksByProject(params: {
+  projectId: string;
+  query: {
+    status?: TaskStatus;
+    assigneeId?: string;
+    overdue?: 0 | 1;
+    page?: number;
+    pageSize?: number;
+  };
+  actorUserId: string;
+}) {
+  const { projectId, query, actorUserId } = params;
 
-    const workspaceId = await this.workspaceAccess.getWorkspaceIdByProjectId(projectId);
+  const workspaceId = await this.workspaceAccess.getWorkspaceIdByProjectId(projectId);
 
-    //  listing = membre simple suffit (sinon MEMBER ne verra rien)
-    await this.workspaceAccess.assertMember(workspaceId, actorUserId);
+  // listing = membre simple suffit
+  await this.workspaceAccess.assertMember(workspaceId, actorUserId);
 
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 20;
-    const skip = (page - 1) * pageSize;
+  const page = query.page ?? 1;
+  const pageSize = query.pageSize ?? 20;
+  const skip = (page - 1) * pageSize;
 
-    const now = new Date();
+  const now = new Date();
 
-    const where: any = {
-      project_id: projectId,
-      deleted: 0,
-      // active: 1,
-    };
+  const where: any = {
+    project_id: projectId,
+    deleted: 0,
+    // active: 1,
+  };
 
-    if (query.status) where.status = query.status;
-    if (query.assigneeId) where.assignee_id = query.assigneeId;
+  if (query.status) where.status = query.status;
+  if (query.assigneeId) where.assignee_id = query.assigneeId;
 
-    if (query.overdue === 1) {
-      where.deadline = { lt: now };
-      where.status = where.status ?? { not: TaskStatus.DONE };
-    }
+  if (query.overdue === 1) {
+    where.deadline = { lt: now };
+    where.status = where.status ?? { not: TaskStatus.DONE };
+  }
 
-    const [total, items] = await Promise.all([
-      this.prisma.task.count({ where }),
-      this.prisma.task.findMany({
-        where,
-        orderBy: [{ status: 'asc' }, { deadline: 'asc' }, { creation_date: 'desc' }],
-        skip,
-        take: pageSize,
-        select: {
-          task_id: true,
-          title: true,
-          description: true,
-          status: true,
-          priority: true,
-          deadline: true,
-          assignee_id: true,
-          creation_date: true,
-          last_update_date: true,
+  const [total, items] = await Promise.all([
+    this.prisma.task.count({ where }),
+    this.prisma.task.findMany({
+      where,
+      orderBy: [{ status: 'asc' }, { deadline: 'asc' }, { creation_date: 'desc' }],
+      skip,
+      take: pageSize,
+      select: {
+        task_id: true,
+        title: true,
+        description: true,
+        status: true,
+        priority: true,
+        deadline: true,
+        assignee_id: true,
+        creation_date: true,
+        last_update_date: true,
 
-          // si tu as DESISTE fields dans le modèle et tu veux les voir côté UI:
-          assignee_id_old: true,
-          desist_reason: true,
-          desist_comment: true,
-          desist_date: true,
-        },
-      }),
-    ]);
+        assignee_id_old: true,
+        desist_reason: true,
+        desist_comment: true,
+        desist_date: true,
+      },
+    }),
+  ]);
+
+  const enriched = items.map((t) => {
+    const deadline = t.deadline ?? null;
+
+    const isOverdue =
+      !!deadline &&
+      deadline.getTime() < now.getTime() &&
+      t.status !== TaskStatus.DONE &&
+      t.status !== TaskStatus.DESISTE;
+
+    const overdueByMinutes =
+      isOverdue && deadline ? Math.floor((now.getTime() - deadline.getTime()) / (60 * 1000)) : 0;
 
     return {
-      page,
-      pageSize,
-      total,
-      totalPages: Math.ceil(total / pageSize),
-      items,
+      ...t,
+      is_overdue: isOverdue,
+      overdue_by_minutes: overdueByMinutes,
     };
-  }
+  });
+
+  return {
+    page,
+    pageSize,
+    total,
+    totalPages: Math.ceil(total / pageSize),
+    items: enriched,
+  };
+}
+
 
   /**
    * Met à jour une tâche (PATCH).
@@ -530,12 +549,32 @@ export class TasksService {
       byStatus[row.status] = row._count.status;
     }
 
+    //  enrich tasks (pas items)
+    const enrichedTasks = tasks.map((t) => {
+      const deadline = t.deadline ?? null;
+
+      const isOverdue =
+        !!deadline &&
+        deadline.getTime() < now.getTime() &&
+        t.status !== TaskStatus.DONE &&
+        t.status !== TaskStatus.DESISTE;
+
+      const overdueByMinutes =
+        isOverdue && deadline ? Math.floor((now.getTime() - deadline.getTime()) / (60 * 1000)) : 0;
+
+      return {
+        ...t,
+        is_overdue: isOverdue,
+        overdue_by_minutes: overdueByMinutes,
+      };
+    });
+
     return {
       page,
       pageSize,
       total,
       totalPages: Math.ceil(total / pageSize),
-      tasks,
+      tasks: enrichedTasks,
       counts: {
         overdue: overdueCount,
         dueSoon: dueSoonCount,
@@ -543,6 +582,7 @@ export class TasksService {
       },
     };
   }
+
 
   /**
    * Récupère la tâche + vérifie accès workspace (membre suffit).

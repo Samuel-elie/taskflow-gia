@@ -15,7 +15,7 @@ type Workspace = {
   workspace_id: string;
   name: string;
   active?: number;
-  role?: WorkspaceRole; // ✅ role renvoyé par /workspaces/me
+  role?: WorkspaceRole; //  role renvoyé par /workspaces/me
 };
 
 function StatusPill({ active }: { active: number }) {
@@ -33,7 +33,7 @@ function StatusPill({ active }: { active: number }) {
   );
 }
 
-/** ✅ Permissions UI (MVP) */
+/**  Permissions UI (MVP) */
 function canCreateProject(role?: WorkspaceRole) {
   return role === 'OWNER' || role === 'MANAGER';
 }
