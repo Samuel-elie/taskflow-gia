@@ -17,6 +17,9 @@ import { AttachmentsModule } from './attachments/attachments.module';
 import { AdminUsersModule } from './admin-users/admin-users.module';
 import { UsersModule } from './users/users.module'; 
 
+import { MetricsController } from './metrics/metrics.controller';
+
+
 
 @Module({
   imports: [
@@ -36,7 +39,7 @@ import { UsersModule } from './users/users.module';
     JobsModule,
     DashboardModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController,MetricsController],
   providers: [AppService],
 })
 export class AppModule {}

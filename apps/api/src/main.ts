@@ -19,17 +19,19 @@ async function bootstrap() {
   );
 
   //  CORS (local + Vercel)
-  app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://taskflow-gia.vercel.app',
-      'https://taskflow-gia-aeeg.vercel.app',
-    ],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: false, //  OK car tu utilises Authorization Bearer, pas cookies
-  });
+app.enableCors({
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://taskflow.local',
+    'http://api.taskflow.local',
+    'https://taskflow-gia.vercel.app',
+    'https://taskflow-gia-aeeg.vercel.app',
+  ],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+});
 
   //  Servir les fichiers uploadés en statique: /uploads/...
   const uploadDir = join(process.cwd(), 'uploads');
